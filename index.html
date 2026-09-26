@@ -228,7 +228,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-26-A';
+  var APP_BUILD = '2026-09-26-B';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -494,7 +494,7 @@
     var h = '';
     pend.forEach(function(e){
       h += '<div class="camino">' +
-        '<div class="t">' + usd(cent(e.usd)) + ' en camino</div>' +
+        '<div class="t">' + (S.soyDueno ? usd(cent(e.usd)) + ' en camino' : 'Un envío en camino') + '</div>' +
         '<div class="d">Mandado el ' + esc(fecha(e.mandado_el)) +
           (e.como ? ' por ' + esc(e.como) : '') + '. Todavía nadie ha dicho que llegó.</div>' +
         (S.soyDueno
@@ -556,8 +556,8 @@
       if (!llego(e)) return;                       // lo que va en camino ya se ve arriba
       items.push({ f:e.llego_el, tipo:'entra', id:e.id,
         qué:'Entró dinero' + (e.como ? ' · ' + e.como : ''),
-        nota:(e.usd ? 'Salieron ' + usd(cent(e.usd)) : 'Sin registrar cuánto salió') +
-             (e.nota ? ' · ' + e.nota : ''),
+        nota:(S.soyDueno ? ((e.usd ? 'Salieron ' + usd(cent(e.usd)) : 'Sin registrar cuánto salió') +
+               (e.nota ? ' · ' : '')) : '') + (e.nota || ''),
         cent:cent(e.gtq), quien:e.confirmo || e.anoto });
     });
     S.gastos.forEach(function(g){
@@ -756,9 +756,12 @@
 
   function hojaEntro(){
     var camino = enCaminoUsdCent(S.envios);
+    var nCamino = S.envios.filter(function(e){ return !llego(e) && e.usd; }).length;
     abrirHoja('Entró dinero',
       (camino > 0
-        ? '<div class="aviso ojo">Hay ' + usd(camino) + ' que aparecen como <b>en camino</b> arriba. ' +
+        ? '<div class="aviso ojo">Hay ' +
+          (S.soyDueno ? usd(camino) + ' que aparecen' : (nCamino === 1 ? 'un envío que aparece' : nCamino + ' envíos que aparecen')) +
+          ' como <b>en camino</b> arriba. ' +
           'Si este dinero es ese, salga y use el botón <b>Sí, ya llegó</b>, para que no se cuente dos veces.</div>'
         : '') +
       '<label for="fMonto">¿Cuánto le llegó? (' + simbolo() + ')</label>' +
@@ -812,8 +815,9 @@
     var e = S.envios.filter(function(x){ return x.id === id; })[0];
     if (!e) return;
     abrirHoja('Ya llegó',
-      '<div class="aviso bien">Salieron ' + usd(cent(e.usd)) + ' el ' + esc(fecha(e.mandado_el)) +
-        (e.como ? ' por ' + esc(e.como) : '') + '.</div>' +
+      '<div class="aviso bien">' +
+        (S.soyDueno ? 'Salieron ' + usd(cent(e.usd)) + ' el ' : 'Lo mandó el ') +
+        esc(fecha(e.mandado_el)) + (e.como ? ' por ' + esc(e.como) : '') + '.</div>' +
       '<label for="fMonto">¿Cuántos ' + simbolo() + ' le llegaron a la mano?</label>' +
       '<input id="fMonto" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00">' +
       campoFecha('fFecha', '¿Qué día llegó?') +
