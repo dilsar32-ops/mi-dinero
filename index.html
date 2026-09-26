@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#11261f">
 <title>Mi Dinero</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mi Dinero">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
 <style>
@@ -23,7 +27,7 @@
   body{
     background:var(--fondo); color:var(--texto);
     font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    padding-bottom:40px;
+    padding-bottom:calc(env(safe-area-inset-bottom) + 40px);
   }
   .barra{
     position:sticky; top:0; z-index:10; background:var(--fondo);
@@ -228,7 +232,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-26-B';
+  var APP_BUILD = '2026-09-26-C';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
