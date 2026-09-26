@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#11261f">
-<title>Mi Dinero</title>
+<title>Arca</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Mi Dinero">
+<meta name="apple-mobile-web-app-title" content="Arca">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
@@ -37,6 +37,7 @@
   }
   .barra h1{font-size:17px; margin:0; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .env{padding:16px; max-width:640px; margin:0 auto}
+  #puerta, #armar, #espera{padding-top:calc(env(safe-area-inset-top) + 16px)}
   .tarjeta{background:var(--tarjeta); border:1px solid var(--linea); border-radius:var(--r); padding:16px; margin-bottom:14px}
 
   /* el numero que importa */
@@ -106,7 +107,7 @@
 <!-- ================= ENTRAR ================= -->
 <div id="puerta" class="env">
   <div style="text-align:center; padding:26px 0 18px">
-    <div style="font-size:30px; font-weight:700; letter-spacing:-.02em">Mi Dinero</div>
+    <div style="font-size:34px; font-weight:700; letter-spacing:.16em">ARCA</div>
     <div class="sub" id="puertaSub">El fondo de la casa</div>
   </div>
   <div class="tarjeta">
@@ -206,7 +207,7 @@
       <div id="listaMov"><div class="sub">Cargando…</div></div>
     </div>
 
-    <div class="pie">Mi Dinero · versión <span id="verTag"></span></div>
+    <div class="pie">Arca · versión <span id="verTag"></span></div>
   </div>
 </div>
 
@@ -232,7 +233,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-26-C';
+  var APP_BUILD = '2026-09-26-E';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces

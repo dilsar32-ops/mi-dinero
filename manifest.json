@@ -1,6 +1,6 @@
 {
-  "name": "Mi Dinero",
-  "short_name": "Mi Dinero",
+  "name": "Arca",
+  "short_name": "Arca",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0f1a16",

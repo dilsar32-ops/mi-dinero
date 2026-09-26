@@ -1,4 +1,4 @@
-# Mi Dinero
+# Arca
 
 Fondo compartido para la casa: uno manda dólares, la otra anota lo que
 llega en quetzales, en qué lo gasta y la foto del recibo. Los dos ven el
