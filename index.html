@@ -201,6 +201,16 @@
       <div id="listaCats"></div>
     </div>
 
+    <div class="tarjeta" id="cajaOrigen" hidden>
+      <h2>De dónde vino el dinero</h2>
+      <div id="listaOrigen"></div>
+    </div>
+
+    <div class="tarjeta" id="cajaDestino" hidden>
+      <h2>A quién se le ha pagado</h2>
+      <div id="listaDestino"></div>
+    </div>
+
     <!-- movimientos -->
     <div class="tarjeta">
       <h2 id="movTitulo">Todo lo que ha pasado</h2>
@@ -233,7 +243,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-26-G';
+  var APP_BUILD = '2026-09-26-I';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -308,6 +318,30 @@
     return Object.keys(m).map(function(k){ return { nombre: k, cent: m[k] }; })
             .sort(function(a, b){ return b.cent - a.cent; });
   }
+  // De donde vino el dinero que YA LLEGO. Mismo molde que porCategoria:
+  // lo que no trae nombre no se adivina, se llama "Sin anotar".
+  function porOrigen(envios){
+    var m = {};
+    (envios || []).forEach(function(e){
+      if (!llego(e)) return;                  // lo que va en camino todavia no entro
+      var k = (e.de_quien || '').trim() || 'Sin anotar';
+      m[k] = (m[k] || 0) + cent(e.gtq);
+    });
+    return Object.keys(m).map(function(k){ return { nombre: k, cent: m[k] }; })
+            .sort(function(a, b){ return b.cent - a.cent; });
+  }
+
+  // A quien se le pago. Igual: sin inventar.
+  function porDestino(gastos){
+    var m = {};
+    (gastos || []).forEach(function(g){
+      var k = (g.a_quien || '').trim() || 'Sin anotar';
+      m[k] = (m[k] || 0) + cent(g.gtq);
+    });
+    return Object.keys(m).map(function(k){ return { nombre: k, cent: m[k] }; })
+            .sort(function(a, b){ return b.cent - a.cent; });
+  }
+
   // ====== FIN DE LAS CUENTAS ==================================
 
   var S = { tok:null, ref:null, correo:null, uid:null, vence:0,
@@ -471,6 +505,8 @@
     pintarCamino();
     pintarDueno();
     pintarCats();
+    pintarOrigen();
+    pintarDestino();
     pintarMovimientos();
 
     $('#btnMande').hidden = !S.soyDueno;
@@ -526,10 +562,16 @@
         simbolo() + ' ' + camb.porDolar.toFixed(2) + ' por dólar. Es un cálculo aproximado, ' +
         'no el cambio de hoy.</div>';
     }
-    var sinSalida = S.envios.filter(function(e){ return llego(e) && !e.usd; });
+    // Solo se avisa de las llegadas que son DE EL. El dinero que vino de
+    // otro lado (un pariente, una venta) nunca salio de su cuenta, y
+    // ponerle dolares inflaria su "ha mandado en total" con plata ajena.
+    var yo = (S.miNombre || '').trim().toLowerCase();
+    var sinSalida = S.envios.filter(function(e){
+      return llego(e) && !e.usd && (e.de_quien || '').trim().toLowerCase() === yo;
+    });
     if (sinSalida.length){
       h += '<div class="aviso ojo" style="margin:12px 0 0">' + sinSalida.length +
-        (sinSalida.length === 1 ? ' llegada anotada sin' : ' llegadas anotadas sin') +
+        (sinSalida.length === 1 ? ' llegada suya anotada sin' : ' llegadas suyas anotadas sin') +
         ' el monto en dólares. Ábrala abajo y póngale cuánto salió de su cuenta.</div>';
     }
     $('#resumenDueno').innerHTML = h;
@@ -537,6 +579,39 @@
   function linea(izq, der, estilo){
     return '<div class="fila"><div class="izq"><div class="qué">' + esc(izq) + '</div></div>' +
            '<div class="monto" ' + (estilo || '') + '>' + esc(der) + '</div></div>';
+  }
+
+  // Las tres listas (categorias, de donde vino, a quien se le pago) se
+  // dibujan igual: barra proporcional y su porcentaje del total.
+  function pintarBarras(donde, filas, totalCent){
+    var caja = $(donde);
+    if (!caja) return false;
+    if (!filas.length){ caja.innerHTML = ''; return false; }
+    var mayor = filas[0].cent || 1, total = totalCent || 1, h = '';
+    filas.forEach(function(c){
+      var pct = Math.round((c.cent / total) * 100);
+      h += '<div class="catfila">' +
+        '<div class="n">' + esc(c.nombre) + ' <span class="chip">' + pct + '%</span></div>' +
+        '<div class="v">' + plata(c.cent) + '</div>' +
+        '<div class="b"><div class="barrita" style="width:' +
+           Math.max(3, Math.round((c.cent / mayor) * 100)) + '%"></div></div>' +
+        '</div>';
+    });
+    caja.innerHTML = h;
+    return true;
+  }
+
+  function pintarOrigen(){
+    var f = porOrigen(S.envios);
+    var hay = pintarBarras('#listaOrigen', f, recibidoCent(S.envios));
+    $('#cajaOrigen').hidden = !hay;
+  }
+  function pintarDestino(){
+    var f = porDestino(S.gastos);
+    // Si TODO esta sin anotar, la tarjeta no dice nada util: se esconde.
+    var util = f.length > 1 || (f.length === 1 && f[0].nombre !== 'Sin anotar');
+    var hay = util && pintarBarras('#listaDestino', f, gastadoCent(S.gastos));
+    $('#cajaDestino').hidden = !hay;
   }
 
   function pintarCats(){
@@ -560,14 +635,16 @@
     S.envios.forEach(function(e){
       if (!llego(e)) return;                       // lo que va en camino ya se ve arriba
       items.push({ f:e.llego_el, tipo:'entra', id:e.id,
-        qué:'Entró dinero' + (e.como ? ' · ' + e.como : ''),
+        qué:'Entró dinero' + (e.de_quien ? ' · de ' + e.de_quien : '') +
+            (e.como ? ' · ' + e.como : ''),
         nota:(S.soyDueno ? ((e.usd ? 'Salieron ' + usd(cent(e.usd)) : 'Sin registrar cuánto salió') +
                (e.nota ? ' · ' : '')) : '') + (e.nota || ''),
         cent:cent(e.gtq), quien:e.confirmo || e.anoto });
     });
     S.gastos.forEach(function(g){
       items.push({ f:g.gastado_el, tipo:'sale', id:g.id,
-        qué:g.categoria, nota:g.nota || '', cent:cent(g.gtq),
+        qué:g.categoria + (g.a_quien ? ' · a ' + g.a_quien : ''),
+        nota:g.nota || '', cent:cent(g.gtq),
         foto:g.foto, quien:g.anoto });
     });
     items.sort(function(a, b){ return String(b.f).localeCompare(String(a.f)); });
@@ -696,6 +773,25 @@
   }
   // El <select> SIEMPRE arranca vacio. Un select que llega con la
   // primera opcion ya escogida es como se manda un dato que nadie puso.
+  // Campo de nombre con las opciones que ya se han usado antes, para que
+  // nadie tenga que volver a teclear "Ferreteria La Bendicion" cada vez.
+  // Es una lista de ayuda, no una reja: se puede escribir cualquier cosa.
+  function campoPersona(id, etiqueta, marcador, yaUsados){
+    var vistos = {}, ops = '';
+    (yaUsados || []).forEach(function(v){
+      var t = (v || '').trim();
+      if (!t || vistos[t.toLowerCase()]) return;
+      vistos[t.toLowerCase()] = 1;
+      ops += '<option value="' + esc(t) + '"></option>';
+    });
+    return '<label for="' + id + '">' + esc(etiqueta) + '</label>' +
+      '<input id="' + id + '" type="text" autocapitalize="words" ' +
+        'list="' + id + 'Lista" placeholder="' + esc(marcador) + '">' +
+      '<datalist id="' + id + 'Lista">' + ops + '</datalist>';
+  }
+  function nombresDeOrigen(){ return (S.envios || []).map(function(e){ return e.de_quien; }); }
+  function nombresDeDestino(){ return (S.gastos || []).map(function(g){ return g.a_quien; }); }
+
   function campoCategoria(){
     var o = '<option value="">— escoja —</option>';
     S.cats.forEach(function(c){ o += '<option value="' + esc(c.nombre) + '">' + esc(c.nombre) + '</option>'; });
@@ -707,6 +803,8 @@
       '<label for="fMonto">¿Cuánto gastó? (' + simbolo() + ')</label>' +
       '<input id="fMonto" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00">' +
       campoCategoria() +
+      campoPersona('fAQuien', '¿A quién le pagó? (opcional)',
+                   'Ferretería, el albañil, …', nombresDeDestino()) +
       '<label for="fNota">¿Qué fue? (opcional)</label>' +
       '<input id="fNota" type="text" placeholder="20 sacos de cemento">' +
       campoFecha('fFecha', '¿Qué día?') +
@@ -722,6 +820,7 @@
     if (!f){ aviso('#hojaAviso', 'Ponga el día.'); return Promise.resolve(false); }
 
     var gasto = { casa_id:S.casa.id, gastado_el:f, gtq:monto, categoria:cat,
+                  a_quien:val('fAQuien') || null,
                   nota:val('fNota') || null, anoto:S.miNombre };
     var archivo = ($('#fFoto').files || [])[0] || null;
 
@@ -772,6 +871,8 @@
       '<label for="fMonto">¿Cuánto le llegó? (' + simbolo() + ')</label>' +
       '<input id="fMonto" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00">' +
       campoFecha('fFecha', '¿Qué día llegó?') +
+      campoPersona('fDeQuien', '¿De quién vino?',
+                   'Su nombre, un pariente, una venta…', nombresDeOrigen()) +
       '<label for="fComo">¿Por dónde llegó? (opcional)</label>' +
       '<input id="fComo" type="text" placeholder="Western Union">' +
       '<label for="fNota">Nota (opcional)</label>' +
@@ -782,6 +883,7 @@
         if (!f){ aviso('#hojaAviso', 'Ponga el día.'); return Promise.resolve(false); }
         return pedir('/rest/v1/casa_envios', { metodo:'POST', cuerpo:{
           casa_id:S.casa.id, mandado_el:f, llego_el:f, gtq:monto,
+          de_quien:val('fDeQuien') || null,
           como:val('fComo') || null, nota:val('fNota') || null,
           anoto:S.miNombre, confirmo:S.miNombre, confirmado:new Date().toISOString()
         }}).then(function(r){
@@ -807,7 +909,7 @@
         if (!monto){ aviso('#hojaAviso', 'Escriba cuánto mandó.'); return Promise.resolve(false); }
         if (!f){ aviso('#hojaAviso', 'Ponga el día.'); return Promise.resolve(false); }
         return pedir('/rest/v1/casa_envios', { metodo:'POST', cuerpo:{
-          casa_id:S.casa.id, mandado_el:f, usd:monto,
+          casa_id:S.casa.id, mandado_el:f, usd:monto, de_quien:S.miNombre,
           como:val('fComo') || null, nota:val('fNota') || null, anoto:S.miNombre
         }}).then(function(r){
           if (!r.ok) return leerError(r).then(function(m){ throw new Error(m); });
