@@ -125,7 +125,7 @@
     <div style="height:10px"></div>
     <button class="btn claro" id="pCambiar">No tengo cuenta · crear una</button>
   </div>
-  <div class="pie">Sus datos viven en su propia base. Nadie del trabajo entra aquí.</div>
+  <div class="pie">Sus datos viven en su propia base. Nadie del trabajo entra aquí.<br><span style="opacity:.6">versión <span id="verTagPuerta"></span></span></div>
 </div>
 
 <!-- ================= ARMAR EL FONDO (primera vez) ================= -->
@@ -233,7 +233,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-26-F';
+  var APP_BUILD = '2026-09-26-G';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -1005,6 +1005,7 @@
   // ====== ARRANQUE ============================================
   function arrancar(){
     $('#verTag').textContent = APP_BUILD;
+    var vp = $('#verTagPuerta'); if (vp) vp.textContent = APP_BUILD;
     pintarPuerta();
 
     $('#pEntrar').addEventListener('click', entrar);
