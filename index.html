@@ -1,0 +1,1079 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#11261f">
+<title>Mi Dinero</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<style>
+  /* ---- reglas de apagado primero, y cada una en su propia linea ---- */
+  [hidden]{display:none !important}
+  .oculto{display:none !important}
+
+  :root{
+    --fondo:#0f1a16; --tarjeta:#16241f; --tarjeta2:#1d2f28;
+    --linea:#274036; --texto:#eef5f1; --suave:#9db3a9;
+    --verde:#3fb984; --rojo:#e2685f; --ambar:#e0a44a;
+    --r:14px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0; padding:0}
+  body{
+    background:var(--fondo); color:var(--texto);
+    font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding-bottom:40px;
+  }
+  .barra{
+    position:sticky; top:0; z-index:10; background:var(--fondo);
+    border-bottom:1px solid var(--linea);
+    padding:calc(env(safe-area-inset-top) + 12px) 16px 12px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .barra h1{font-size:17px; margin:0; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .env{padding:16px; max-width:640px; margin:0 auto}
+  .tarjeta{background:var(--tarjeta); border:1px solid var(--linea); border-radius:var(--r); padding:16px; margin-bottom:14px}
+
+  /* el numero que importa */
+  .granlbl{font-size:12px; letter-spacing:.09em; text-transform:uppercase; color:var(--suave); margin-bottom:6px}
+  .gran{font-size:40px; font-weight:700; line-height:1.05; letter-spacing:-.02em; font-variant-numeric:tabular-nums}
+  .gran.rojo{color:var(--rojo)}
+  .sub{color:var(--suave); font-size:14px; margin-top:8px}
+
+  .fila{display:flex; justify-content:space-between; gap:12px; padding:11px 0; border-bottom:1px solid var(--linea)}
+  .fila:last-child{border-bottom:0}
+  .fila .izq{min-width:0}
+  .fila .qué{font-weight:600}
+  .fila .cuando{color:var(--suave); font-size:13px; margin-top:2px}
+  .fila .monto{font-weight:700; white-space:nowrap; font-variant-numeric:tabular-nums}
+  .monto.entra{color:var(--verde)}
+  .monto.sale{color:var(--texto)}
+
+  h2{font-size:13px; letter-spacing:.09em; text-transform:uppercase; color:var(--suave); margin:0 0 10px}
+
+  .btn{
+    display:block; width:100%; min-height:50px; border-radius:12px;
+    border:1px solid var(--linea); background:var(--tarjeta2); color:var(--texto);
+    font-size:16px; font-weight:600; padding:12px 14px; cursor:pointer;
+  }
+  .btn:active{transform:scale(.99); filter:brightness(1.15)}
+  .btn:disabled{opacity:.5}
+  .btn.verde{background:var(--verde); border-color:var(--verde); color:#07221a}
+  .btn.claro{background:transparent}
+  .btn.chico{min-height:38px; font-size:14px; font-weight:500; width:auto; padding:8px 14px}
+  .dos{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+
+  label{display:block; font-size:13px; color:var(--suave); margin:14px 0 6px}
+  input,select,textarea{
+    width:100%; padding:13px; font-size:17px; border-radius:11px;
+    border:1px solid var(--linea); background:var(--tarjeta2); color:var(--texto);
+    font-family:inherit; -webkit-appearance:none;
+  }
+  input[type=file]{padding:10px; font-size:14px}
+  textarea{min-height:66px; font-size:16px}
+
+  .aviso{border-radius:11px; padding:12px 14px; font-size:14px; margin-bottom:12px}
+  .aviso.malo{background:#3a1f1d; border:1px solid var(--rojo); color:#ffd9d5}
+  .aviso.bien{background:#16342a; border:1px solid var(--verde); color:#cdf3e2}
+  .aviso.ojo{background:#3a2f18; border:1px solid var(--ambar); color:#ffe9c4}
+
+  .camino{background:#3a2f18; border:1px solid var(--ambar); border-radius:var(--r); padding:14px; margin-bottom:14px}
+  .camino .t{font-weight:700; color:#ffe9c4}
+  .camino .d{color:#e8d3ab; font-size:14px; margin:4px 0 10px}
+
+  .barrita{height:6px; border-radius:3px; background:var(--verde); min-width:3px}
+  .catfila{display:grid; grid-template-columns:1fr auto; gap:4px 12px; padding:9px 0; border-bottom:1px solid var(--linea)}
+  .catfila:last-child{border-bottom:0}
+  .catfila .n{font-size:15px}
+  .catfila .v{font-weight:700; font-variant-numeric:tabular-nums}
+  .catfila .b{grid-column:1 / -1}
+
+  .miniftgr{width:46px; height:46px; border-radius:8px; object-fit:cover; border:1px solid var(--linea); background:var(--tarjeta2); cursor:pointer}
+  .visor{position:fixed; inset:0; background:#000e; z-index:100; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px; padding:20px}
+  .visor img{max-width:100%; max-height:80vh; border-radius:10px}
+
+  .pie{color:var(--suave); font-size:12px; text-align:center; padding:18px 16px 6px}
+  .chip{display:inline-block; font-size:12px; color:var(--suave); border:1px solid var(--linea); border-radius:999px; padding:3px 9px; margin-left:6px}
+</style>
+</head>
+<body>
+
+<!-- ================= ENTRAR ================= -->
+<div id="puerta" class="env">
+  <div style="text-align:center; padding:26px 0 18px">
+    <div style="font-size:30px; font-weight:700; letter-spacing:-.02em">Mi Dinero</div>
+    <div class="sub" id="puertaSub">El fondo de la casa</div>
+  </div>
+  <div class="tarjeta">
+    <div id="puertaAviso"></div>
+    <label for="pCorreo">Correo</label>
+    <input id="pCorreo" type="email" autocomplete="email" inputmode="email" autocapitalize="off" spellcheck="false" placeholder="correo@ejemplo.com">
+    <label for="pClave">Contraseña</label>
+    <input id="pClave" type="password" autocomplete="current-password" placeholder="••••••••">
+    <div id="pNombreCampo" hidden>
+      <label for="pNombre">¿Cómo se llama?</label>
+      <input id="pNombre" type="text" autocomplete="name" placeholder="Su nombre">
+    </div>
+    <div style="height:16px"></div>
+    <button class="btn verde" id="pEntrar">Entrar</button>
+    <div style="height:10px"></div>
+    <button class="btn claro" id="pCambiar">No tengo cuenta · crear una</button>
+  </div>
+  <div class="pie">Sus datos viven en su propia base. Nadie del trabajo entra aquí.</div>
+</div>
+
+<!-- ================= ARMAR EL FONDO (primera vez) ================= -->
+<div id="armar" class="env" hidden>
+  <div class="barra" style="margin:-16px -16px 16px"><h1>Empezar el fondo</h1></div>
+  <div class="tarjeta">
+    <div id="armarAviso"></div>
+    <p class="sub" style="margin-top:0">Un fondo es una bolsa de dinero que dos personas ven igual. Usted manda, ella anota lo que llega y en qué lo gasta.</p>
+    <label for="aNombre">¿Cómo le llamamos?</label>
+    <input id="aNombre" type="text" value="Casa de Guatemala">
+    <label for="aMoneda">¿En qué moneda gasta ella?</label>
+    <select id="aMoneda">
+      <option value="GTQ|Q" selected>Quetzales de Guatemala (Q)</option>
+      <option value="MXN|$">Pesos mexicanos ($)</option>
+      <option value="HNL|L">Lempiras de Honduras (L)</option>
+      <option value="USD|$">Dólares ($)</option>
+    </select>
+    <label for="aYo">Su nombre</label>
+    <input id="aYo" type="text" placeholder="Amilcar">
+    <div style="height:18px"></div>
+    <button class="btn verde" id="aCrear">Crear el fondo</button>
+  </div>
+</div>
+
+<!-- ================= ESPERANDO INVITACION ================= -->
+<div id="espera" class="env" hidden>
+  <div class="tarjeta" style="margin-top:30px">
+    <h2>Todavía no</h2>
+    <p>Su cuenta ya existe, pero nadie la ha metido a un fondo.</p>
+    <p class="sub" id="esperaCorreo"></p>
+    <p class="sub">Pídale a Amilcar que la invite con <b>ese mismo correo</b>, y vuelva a entrar.</p>
+    <div style="height:10px"></div>
+    <button class="btn claro" id="esperaSalir">Salir</button>
+  </div>
+</div>
+
+<!-- ================= PANTALLA PRINCIPAL ================= -->
+<div id="app" hidden>
+  <div class="barra">
+    <h1 id="tituloFondo">Fondo de la casa</h1>
+    <button class="btn chico claro" id="btnRefrescar">Refrescar</button>
+    <button class="btn chico claro" id="btnMenu">···</button>
+  </div>
+  <div class="env">
+    <div id="appAviso"></div>
+
+    <!-- lo que hay -->
+    <div class="tarjeta">
+      <div class="granlbl" id="granLbl">Le queda</div>
+      <div class="gran" id="granNum">—</div>
+      <div class="sub" id="granSub"></div>
+    </div>
+
+    <!-- dinero en camino -->
+    <div id="caminoCaja"></div>
+
+    <!-- botones de accion -->
+    <div class="dos" style="margin-bottom:14px">
+      <button class="btn verde" id="btnEntro">+ Entró dinero</button>
+      <button class="btn" id="btnGaste">− Gasté</button>
+    </div>
+    <button class="btn" id="btnMande" hidden style="margin-bottom:14px">Mandé dinero →</button>
+
+    <!-- solo el dueno: resumen -->
+    <div class="tarjeta" id="cajaDueno" hidden>
+      <h2>Cómo va el dinero</h2>
+      <div id="resumenDueno"></div>
+    </div>
+
+    <!-- en que se gasta -->
+    <div class="tarjeta" id="cajaCats" hidden>
+      <h2>En qué se ha gastado</h2>
+      <div id="listaCats"></div>
+    </div>
+
+    <!-- movimientos -->
+    <div class="tarjeta">
+      <h2 id="movTitulo">Todo lo que ha pasado</h2>
+      <div id="listaMov"><div class="sub">Cargando…</div></div>
+    </div>
+
+    <div class="pie">Mi Dinero · versión <span id="verTag"></span></div>
+  </div>
+</div>
+
+<!-- ================= HOJA (formularios) ================= -->
+<div id="hoja" class="env" hidden>
+  <div class="barra" style="margin:-16px -16px 16px">
+    <h1 id="hojaTitulo">—</h1>
+    <button class="btn chico claro" id="hojaCerrar">Cancelar</button>
+  </div>
+  <div class="tarjeta">
+    <div id="hojaAviso"></div>
+    <div id="hojaCuerpo"></div>
+    <div style="height:18px"></div>
+    <button class="btn verde" id="hojaGuardar">Guardar</button>
+  </div>
+</div>
+
+<div id="visor" class="visor" hidden>
+  <img id="visorImg" alt="Recibo">
+  <button class="btn claro" id="visorCerrar" style="max-width:220px">Cerrar</button>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var APP_BUILD = '2026-09-26-A';
+
+  // ====== A DONDE SE CONECTA ==================================
+  // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
+  // el app lo dice en la cara en vez de fallar callado.
+  var CLOUD = {
+    url:  'https://mvrghesicrccpmtllxbw.supabase.co',
+    anon: 'sb_publishable_T4OkHgGbgbeF0SIdt4kEJQ_QI6E8upQ'
+  };
+  function configurado(){ return CLOUD.url.indexOf('http') === 0 && CLOUD.anon.length > 40; }
+
+  // ============================================================
+  //  LAS CUENTAS
+  //  Regla que manda: el app NO inventa tipo de cambio. De cada
+  //  envio hay dos numeros reales -- los dolares que salieron (usd)
+  //  y los quetzales que llegaron (gtq). Nunca se calcula uno con
+  //  el otro. Mientras gtq este vacio, ese dinero esta EN CAMINO y
+  //  no cuenta como recibido.
+  //
+  //  Todo se suma en CENTAVOS ENTEROS. Sumar decimales en JavaScript
+  //  se desvia (0.1 + 0.2 no da 0.3) y aqui eso seria plata inventada.
+  // ============================================================
+  function cent(v){
+    var x = Number(v);                       // Postgres manda "12400.00" como texto
+    if (!isFinite(x)) return 0;
+    return Math.round(x * 100);
+  }
+  function deCent(c){ return c / 100; }
+  function llego(e){ return !!(e && e.gtq !== null && e.gtq !== undefined && e.llego_el); }
+
+  function recibidoCent(envios){
+    var t = 0;
+    (envios || []).forEach(function(e){ if (llego(e)) t += cent(e.gtq); });
+    return t;
+  }
+  function gastadoCent(gastos){
+    var t = 0;
+    (gastos || []).forEach(function(g){ t += cent(g.gtq); });
+    return t;
+  }
+  // Lo que ella tiene en la mano AHORA, en su moneda.
+  function saldoCent(envios, gastos){
+    return recibidoCent(envios) - gastadoCent(gastos);
+  }
+  // Dolares que el ha mandado en total (haya llegado o no).
+  function mandadoUsdCent(envios){
+    var t = 0;
+    (envios || []).forEach(function(e){ t += cent(e.usd); });
+    return t;
+  }
+  // Dolares que salieron y que ella todavia no ha confirmado.
+  function enCaminoUsdCent(envios){
+    var t = 0;
+    (envios || []).forEach(function(e){ if (!llego(e)) t += cent(e.usd); });
+    return t;
+  }
+  // El cambio REAL del ultimo envio que llego: no es una cotizacion,
+  // es la division de dos cosas que de verdad pasaron. Sirve solo
+  // para dar una idea, y siempre se rotula como aproximado.
+  function ultimoCambio(envios){
+    var ll = (envios || []).filter(function(e){ return llego(e) && cent(e.usd) > 0; });
+    if (!ll.length) return null;
+    ll.sort(function(a, b){ return String(b.llego_el).localeCompare(String(a.llego_el)); });
+    var e = ll[0];
+    return { porDolar: cent(e.gtq) / cent(e.usd), fecha: e.llego_el };
+  }
+  function porCategoria(gastos){
+    var m = {};
+    (gastos || []).forEach(function(g){
+      var k = g.categoria || 'Otro';
+      m[k] = (m[k] || 0) + cent(g.gtq);
+    });
+    return Object.keys(m).map(function(k){ return { nombre: k, cent: m[k] }; })
+            .sort(function(a, b){ return b.cent - a.cent; });
+  }
+  // ====== FIN DE LAS CUENTAS ==================================
+
+  var S = { tok:null, ref:null, correo:null, uid:null, vence:0,
+            casa:null, soyDueno:false, miNombre:'', envios:[], gastos:[], cats:[] };
+
+  function $(s){ return document.querySelector(s); }
+  function esc(t){
+    return String(t == null ? '' : t)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  function simbolo(){ return (S.casa && S.casa.simbolo) || 'Q'; }
+  function plata(c, sim){
+    var neg = c < 0, v = Math.abs(c) / 100;
+    return (neg ? '-' : '') + (sim || simbolo()) + ' ' +
+      v.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function usd(c){ return plata(c, '$'); }
+  var MES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  function fecha(s){
+    if (!s) return '';
+    var p = String(s).slice(0, 10).split('-');
+    if (p.length !== 3) return String(s);
+    return Number(p[2]) + ' ' + MES[Number(p[1]) - 1] + ' ' + p[0];
+  }
+  function hoy(){
+    var d = new Date(), m = String(d.getMonth() + 1).padStart(2, '0'), g = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + m + '-' + g;
+  }
+  function aviso(donde, texto, clase){
+    var e = $(donde);
+    if (!e) return;
+    e.innerHTML = texto ? '<div class="aviso ' + (clase || 'malo') + '">' + esc(texto) + '</div>' : '';
+  }
+  function ver(cual){
+    ['puerta','armar','espera','app','hoja'].forEach(function(id){
+      var e = document.getElementById(id);
+      if (e) e.hidden = (id !== cual);
+    });
+    window.scrollTo(0, 0);
+  }
+
+  // ====== SESION Y LLAMADAS ===================================
+  var LS_SES = 'casaSesion:v1';
+  function guardarSesion(){
+    try{ localStorage.setItem(LS_SES, JSON.stringify({
+      tok:S.tok, ref:S.ref, correo:S.correo, uid:S.uid, vence:S.vence })); }catch(e){}
+  }
+  function leerSesion(){
+    try{
+      var d = JSON.parse(localStorage.getItem(LS_SES) || 'null');
+      if (d && d.tok){ S.tok = d.tok; S.ref = d.ref; S.correo = d.correo; S.uid = d.uid; S.vence = d.vence || 0; return true; }
+    }catch(e){}
+    return false;
+  }
+  function olvidarSesion(){
+    S.tok = S.ref = S.correo = S.uid = null; S.vence = 0;
+    try{ localStorage.removeItem(LS_SES); }catch(e){}
+  }
+
+  function tomarSesion(d){
+    S.tok = d.access_token; S.ref = d.refresh_token;
+    S.uid = d.user && d.user.id;
+    S.correo = (d.user && d.user.email) || S.correo;
+    S.vence = Date.now() + ((d.expires_in || 3600) - 60) * 1000;
+    guardarSesion();
+  }
+
+  function api(ruta, opciones){
+    var o = opciones || {};
+    var cab = { apikey: CLOUD.anon, 'Content-Type': 'application/json' };
+    if (S.tok) cab.Authorization = 'Bearer ' + S.tok;
+    if (o.cab) Object.keys(o.cab).forEach(function(k){ cab[k] = o.cab[k]; });
+    return fetch(CLOUD.url + ruta, {
+      method: o.metodo || 'GET',
+      headers: cab,
+      body: o.cuerpo === undefined ? undefined : (typeof o.cuerpo === 'string' ? o.cuerpo : JSON.stringify(o.cuerpo))
+    });
+  }
+
+  function refrescarToken(){
+    if (!S.ref) return Promise.resolve(false);
+    return api('/auth/v1/token?grant_type=refresh_token', { metodo:'POST', cuerpo:{ refresh_token:S.ref } })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){ if (!d || !d.access_token) return false; tomarSesion(d); return true; });
+  }
+
+  // Toda peticion con sesion pasa por aqui: si el token vencio, lo
+  // renueva UNA vez y reintenta. Si tampoco, manda a entrar de nuevo
+  // en vez de mostrar numeros viejos como si fueran de hoy.
+  function pedir(ruta, opciones){
+    var reintentado = false;
+    function intento(){
+      return api(ruta, opciones).then(function(r){
+        if (r.status === 401 && !reintentado){
+          reintentado = true;
+          return refrescarToken().then(function(ok){
+            if (!ok) throw new Error('sesion-vencida');
+            return intento();
+          });
+        }
+        return r;
+      });
+    }
+    if (S.vence && Date.now() > S.vence && S.ref){
+      return refrescarToken().then(intento);
+    }
+    return intento();
+  }
+
+  function leerError(r){
+    return r.text().then(function(t){
+      try{
+        var d = JSON.parse(t);
+        return d.message || d.error_description || d.error || d.msg || d.hint || t;
+      }catch(e){ return t; }
+    });
+  }
+
+  // ====== TRAER LOS DATOS =====================================
+  function cargar(){
+    return pedir('/rest/v1/casa?select=id,nombre,moneda,simbolo,dueno&limit=1')
+      .then(function(r){ if (!r.ok) return leerError(r).then(function(m){ throw new Error(m); }); return r.json(); })
+      .then(function(filas){
+        if (!filas.length){
+          // ¿La invitaron? El correo lo toma el servidor del token, no de aqui.
+          return pedir('/rest/v1/rpc/casa_aceptar', { metodo:'POST', cuerpo:{} })
+            .then(function(r){ return r.ok ? r.json() : null; })
+            .then(function(id){ if (id) return cargar(); S.casa = null; return null; });
+        }
+        S.casa = filas[0];
+        return Promise.all([
+          pedir('/rest/v1/casa_miembros?select=nombre,dueno&casa_id=eq.' + S.casa.id + '&user_id=eq.' + S.uid),
+          pedir('/rest/v1/casa_envios?select=*&casa_id=eq.' + S.casa.id + '&order=mandado_el.desc,creado.desc'),
+          pedir('/rest/v1/casa_gastos?select=*&casa_id=eq.' + S.casa.id + '&order=gastado_el.desc,creado.desc'),
+          pedir('/rest/v1/casa_categorias?select=nombre,orden,activa&casa_id=eq.' + S.casa.id + '&activa=eq.true&order=orden')
+        ]).then(function(rs){
+          return Promise.all(rs.map(function(r){ return r.ok ? r.json() : []; }));
+        }).then(function(d){
+          var yo = d[0][0] || { nombre:(S.correo || '').split('@')[0], dueno:false };
+          S.miNombre = yo.nombre; S.soyDueno = !!yo.dueno;
+          S.envios = d[1]; S.gastos = d[2]; S.cats = d[3];
+          return S.casa;
+        });
+      });
+  }
+
+  // ====== PINTAR ==============================================
+  function pintar(){
+    var sc = saldoCent(S.envios, S.gastos);
+    $('#tituloFondo').textContent = S.casa.nombre;
+    $('#granLbl').textContent = S.soyDueno ? 'Le queda a ' + primerNombre() : 'Le queda';
+    var num = $('#granNum');
+    num.textContent = plata(sc);
+    num.className = 'gran' + (sc < 0 ? ' rojo' : '');
+
+    var rec = recibidoCent(S.envios), gas = gastadoCent(S.gastos);
+    $('#granSub').textContent = 'Han llegado ' + plata(rec) + ' · se han gastado ' + plata(gas) +
+      (sc < 0 ? ' · hay más gastado que recibido, algo falta de anotar' : '');
+
+    pintarCamino();
+    pintarDueno();
+    pintarCats();
+    pintarMovimientos();
+
+    $('#btnMande').hidden = !S.soyDueno;
+    $('#cajaDueno').hidden = !S.soyDueno;
+    $('#cajaCats').hidden = !S.gastos.length;
+    $('#movTitulo').textContent = 'Todo lo que ha pasado';
+    $('#verTag').textContent = APP_BUILD;
+  }
+
+  function primerNombre(){
+    var otro = null;
+    // el nombre de ella sale de los apuntes que ella ha hecho
+    S.gastos.concat(S.envios).forEach(function(x){
+      var n = x.anoto || x.confirmo;
+      if (n && n !== S.miNombre && !otro) otro = n;
+    });
+    return otro || 'ella';
+  }
+
+  // El dinero que salio y nadie ha confirmado que llego. Esto no se
+  // esconde: es justo donde la plata se pierde.
+  function pintarCamino(){
+    var pend = S.envios.filter(function(e){ return !llego(e) && e.usd; });
+    var caja = $('#caminoCaja');
+    if (!pend.length){ caja.innerHTML = ''; return; }
+    var h = '';
+    pend.forEach(function(e){
+      h += '<div class="camino">' +
+        '<div class="t">' + usd(cent(e.usd)) + ' en camino</div>' +
+        '<div class="d">Mandado el ' + esc(fecha(e.mandado_el)) +
+          (e.como ? ' por ' + esc(e.como) : '') + '. Todavía nadie ha dicho que llegó.</div>' +
+        (S.soyDueno
+          ? '<button class="btn chico claro" data-quitar-envio="' + esc(e.id) + '">Borrar este envío</button>'
+          : '') +
+        '<button class="btn verde" data-llego="' + esc(e.id) + '" style="margin-top:8px">Sí, ya llegó</button>' +
+        '</div>';
+    });
+    caja.innerHTML = h;
+  }
+
+  function pintarDueno(){
+    if (!S.soyDueno) return;
+    var mandado = mandadoUsdCent(S.envios), camino = enCaminoUsdCent(S.envios);
+    var camb = ultimoCambio(S.envios), sc = saldoCent(S.envios, S.gastos);
+    var h = '';
+    h += linea('Ha mandado en total', usd(mandado));
+    if (camino > 0) h += linea('De eso, en camino', usd(camino), 'style="color:#e0a44a"');
+    h += linea('Le queda a ' + primerNombre(), plata(sc));
+    if (camb && sc > 0){
+      var aprox = Math.round(sc / camb.porDolar);
+      h += '<div class="sub" style="margin-top:10px">Eso es como ' + usd(aprox) +
+        ', usando el cambio del último envío que llegó (' + esc(fecha(camb.fecha)) + '): ' +
+        simbolo() + ' ' + camb.porDolar.toFixed(2) + ' por dólar. Es un cálculo aproximado, ' +
+        'no el cambio de hoy.</div>';
+    }
+    var sinSalida = S.envios.filter(function(e){ return llego(e) && !e.usd; });
+    if (sinSalida.length){
+      h += '<div class="aviso ojo" style="margin:12px 0 0">' + sinSalida.length +
+        (sinSalida.length === 1 ? ' llegada anotada sin' : ' llegadas anotadas sin') +
+        ' el monto en dólares. Ábrala abajo y póngale cuánto salió de su cuenta.</div>';
+    }
+    $('#resumenDueno').innerHTML = h;
+  }
+  function linea(izq, der, estilo){
+    return '<div class="fila"><div class="izq"><div class="qué">' + esc(izq) + '</div></div>' +
+           '<div class="monto" ' + (estilo || '') + '>' + esc(der) + '</div></div>';
+  }
+
+  function pintarCats(){
+    var cats = porCategoria(S.gastos);
+    if (!cats.length){ $('#listaCats').innerHTML = ''; return; }
+    var mayor = cats[0].cent || 1, total = gastadoCent(S.gastos), h = '';
+    cats.forEach(function(c){
+      var pct = Math.round((c.cent / total) * 100);
+      h += '<div class="catfila">' +
+        '<div class="n">' + esc(c.nombre) + ' <span class="chip">' + pct + '%</span></div>' +
+        '<div class="v">' + plata(c.cent) + '</div>' +
+        '<div class="b"><div class="barrita" style="width:' +
+           Math.max(3, Math.round((c.cent / mayor) * 100)) + '%"></div></div>' +
+        '</div>';
+    });
+    $('#listaCats').innerHTML = h;
+  }
+
+  function pintarMovimientos(){
+    var items = [];
+    S.envios.forEach(function(e){
+      if (!llego(e)) return;                       // lo que va en camino ya se ve arriba
+      items.push({ f:e.llego_el, tipo:'entra', id:e.id,
+        qué:'Entró dinero' + (e.como ? ' · ' + e.como : ''),
+        nota:(e.usd ? 'Salieron ' + usd(cent(e.usd)) : 'Sin registrar cuánto salió') +
+             (e.nota ? ' · ' + e.nota : ''),
+        cent:cent(e.gtq), quien:e.confirmo || e.anoto });
+    });
+    S.gastos.forEach(function(g){
+      items.push({ f:g.gastado_el, tipo:'sale', id:g.id,
+        qué:g.categoria, nota:g.nota || '', cent:cent(g.gtq),
+        foto:g.foto, quien:g.anoto });
+    });
+    items.sort(function(a, b){ return String(b.f).localeCompare(String(a.f)); });
+
+    if (!items.length){
+      $('#listaMov').innerHTML = '<div class="sub">Todavía no hay nada apuntado.</div>';
+      return;
+    }
+    var h = '';
+    items.forEach(function(x){
+      h += '<div class="fila">' +
+        (x.foto ? '<img class="miniftgr" data-foto="' + esc(x.foto) + '" alt="Recibo">' : '') +
+        '<div class="izq" style="flex:1">' +
+          '<div class="qué">' + esc(x.qué) + '</div>' +
+          '<div class="cuando">' + esc(fecha(x.f)) +
+            (x.quien ? ' · ' + esc(x.quien) : '') +
+            (x.nota ? ' · ' + esc(x.nota) : '') + '</div>' +
+        '</div>' +
+        '<div class="monto ' + x.tipo + '">' + (x.tipo === 'entra' ? '+' : '−') + ' ' + plata(x.cent) + '</div>' +
+        '</div>';
+    });
+    $('#listaMov').innerHTML = h;
+  }
+
+  // ====== FOTOS ===============================================
+  // Se achica en el telefono antes de subir: la de ella puede andar con
+  // poca senal y una foto de camara son varios megas.
+  function achicar(file){
+    return new Promise(function(res, rej){
+      var img = new Image(), url = URL.createObjectURL(file);
+      img.onload = function(){
+        URL.revokeObjectURL(url);
+        var max = 1600, w = img.width, h = img.height;
+        var s = Math.min(1, max / Math.max(w, h));
+        var c = document.createElement('canvas');
+        c.width = Math.round(w * s); c.height = Math.round(h * s);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        c.toBlob(function(b){ b ? res(b) : rej(new Error('No se pudo preparar la foto.')); }, 'image/jpeg', 0.8);
+      };
+      img.onerror = function(){ URL.revokeObjectURL(url); rej(new Error('No se pudo leer la foto.')); };
+      img.src = url;
+    });
+  }
+  function nuevoId(){
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return 'f' + Date.now() + Math.random().toString(36).slice(2, 9);
+  }
+  function subirFoto(blob){
+    var ruta = S.casa.id + '/' + nuevoId() + '.jpg';
+    return pedir('/storage/v1/object/casa-fotos/' + ruta, {
+      metodo:'POST', cuerpo:blob,
+      cab:{ 'Content-Type':'image/jpeg', 'x-upsert':'true' }
+    }).then(function(r){
+      if (!r.ok) return leerError(r).then(function(m){ throw new Error('La foto no subió: ' + m); });
+      return ruta;
+    });
+  }
+  function abrirFoto(ruta){
+    pedir('/storage/v1/object/sign/casa-fotos/' + ruta, { metodo:'POST', cuerpo:{ expiresIn:3600 } })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){
+        if (!d || !d.signedURL) throw new Error('sin url');
+        $('#visorImg').src = CLOUD.url + '/storage/v1' + d.signedURL.replace(/^\/storage\/v1/, '');
+        $('#visor').hidden = false;
+      })
+      .catch(function(){ alert('No se pudo abrir la foto. Puede ser la señal.'); });
+  }
+
+  // ====== COLA (lo que no se pudo guardar ahora) ===============
+  // Ella puede estar en la ferreteria sin senal. Un gasto que no se
+  // pudo mandar NO se pierde: se guarda aqui y se reintenta. La foto
+  // se guarda tambien, hasta 6, que es lo que aguanta el telefono.
+  var LS_COLA = 'casaCola:v1', COLA_MAX = 6;
+  function colaLeer(){ try{ return JSON.parse(localStorage.getItem(LS_COLA) || '[]'); }catch(e){ return []; } }
+  function colaEscribir(a){ try{ localStorage.setItem(LS_COLA, JSON.stringify(a)); return true; }catch(e){ return false; } }
+  function colaGuardar(gasto, fotoB64){
+    var a = colaLeer();
+    if (a.length >= COLA_MAX) return false;
+    a.push({ gasto:gasto, foto:fotoB64 || null, cuando:Date.now() });
+    return colaEscribir(a);
+  }
+  function b64aBlob(b64){
+    var p = b64.split(','), bin = atob(p[1]), u = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    return new Blob([u], { type:'image/jpeg' });
+  }
+  function colaVaciar(){
+    var a = colaLeer();
+    if (!a.length || !S.casa) return Promise.resolve(0);
+    var subieron = 0, quedan = [];
+    return a.reduce(function(cad, item){
+      return cad.then(function(){
+        var paso = item.foto
+          ? subirFoto(b64aBlob(item.foto)).then(function(r){ item.gasto.foto = r; })
+          : Promise.resolve();
+        return paso
+          .then(function(){ return pedir('/rest/v1/casa_gastos', { metodo:'POST', cuerpo:item.gasto }); })
+          .then(function(r){ if (!r.ok) throw new Error('no'); subieron++; })
+          .catch(function(){ quedan.push(item); });
+      });
+    }, Promise.resolve()).then(function(){
+      colaEscribir(quedan);
+      return subieron;
+    });
+  }
+
+  // ====== FORMULARIOS =========================================
+  var hojaAccion = null;
+  function abrirHoja(titulo, cuerpo, accion){
+    $('#hojaTitulo').textContent = titulo;
+    $('#hojaCuerpo').innerHTML = cuerpo;
+    aviso('#hojaAviso', '');
+    hojaAccion = accion;
+    ver('hoja');
+  }
+  function cerrarHoja(){ hojaAccion = null; ver('app'); }
+  function val(id){ var e = document.getElementById(id); return e ? String(e.value || '').trim() : ''; }
+  function numero(id){
+    var t = val(id).replace(/,/g, '');
+    var x = Number(t);
+    return (t && isFinite(x) && x > 0) ? x : null;
+  }
+  function campoFecha(id, etiqueta){
+    return '<label for="' + id + '">' + etiqueta + '</label>' +
+           '<input id="' + id + '" type="date" value="' + hoy() + '">';
+  }
+  // El <select> SIEMPRE arranca vacio. Un select que llega con la
+  // primera opcion ya escogida es como se manda un dato que nadie puso.
+  function campoCategoria(){
+    var o = '<option value="">— escoja —</option>';
+    S.cats.forEach(function(c){ o += '<option value="' + esc(c.nombre) + '">' + esc(c.nombre) + '</option>'; });
+    return '<label for="fCat">¿En qué lo gastó?</label><select id="fCat">' + o + '</select>';
+  }
+
+  function hojaGaste(){
+    abrirHoja('Gasté', 
+      '<label for="fMonto">¿Cuánto gastó? (' + simbolo() + ')</label>' +
+      '<input id="fMonto" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00">' +
+      campoCategoria() +
+      '<label for="fNota">¿Qué fue? (opcional)</label>' +
+      '<input id="fNota" type="text" placeholder="20 sacos de cemento">' +
+      campoFecha('fFecha', '¿Qué día?') +
+      '<label for="fFoto">Foto del recibo</label>' +
+      '<input id="fFoto" type="file" accept="image/*" capture="environment">',
+      guardarGasto);
+  }
+
+  function guardarGasto(){
+    var monto = numero('fMonto'), cat = val('fCat'), f = val('fFecha');
+    if (!monto){ aviso('#hojaAviso', 'Escriba cuánto gastó.'); return Promise.resolve(false); }
+    if (!cat){ aviso('#hojaAviso', 'Escoja en qué lo gastó.'); return Promise.resolve(false); }
+    if (!f){ aviso('#hojaAviso', 'Ponga el día.'); return Promise.resolve(false); }
+
+    var gasto = { casa_id:S.casa.id, gastado_el:f, gtq:monto, categoria:cat,
+                  nota:val('fNota') || null, anoto:S.miNombre };
+    var archivo = ($('#fFoto').files || [])[0] || null;
+
+    return (archivo ? achicar(archivo) : Promise.resolve(null))
+      .then(function(blob){
+        if (!blob) return null;
+        return subirFoto(blob).then(function(r){ gasto.foto = r; return blob; });
+      })
+      .then(function(){
+        return pedir('/rest/v1/casa_gastos', { metodo:'POST', cuerpo:gasto })
+          .then(function(r){
+            if (!r.ok) return leerError(r).then(function(m){ throw new Error(m); });
+            return true;
+          });
+      })
+      .catch(function(err){
+        // No se pudo. El gasto NO se tira: se guarda para reintentar.
+        return (archivo ? aB64(archivo) : Promise.resolve(null)).then(function(b64){
+          var ok = colaGuardar(gasto, b64);
+          aviso('#hojaAviso', ok
+            ? 'No hubo señal, pero su gasto quedó guardado en el teléfono. Se va a mandar solo cuando haya internet. No lo escriba otra vez.'
+            : 'No se pudo guardar: ' + err.message, ok ? 'ojo' : 'malo');
+          return ok ? 'cola' : false;
+        });
+      });
+  }
+  function aB64(file){
+    return achicar(file).then(function(blob){
+      return new Promise(function(res){
+        var fr = new FileReader();
+        fr.onload = function(){ res(fr.result); };
+        fr.onerror = function(){ res(null); };
+        fr.readAsDataURL(blob);
+      });
+    }).catch(function(){ return null; });
+  }
+
+  function hojaEntro(){
+    var camino = enCaminoUsdCent(S.envios);
+    abrirHoja('Entró dinero',
+      (camino > 0
+        ? '<div class="aviso ojo">Hay ' + usd(camino) + ' que aparecen como <b>en camino</b> arriba. ' +
+          'Si este dinero es ese, salga y use el botón <b>Sí, ya llegó</b>, para que no se cuente dos veces.</div>'
+        : '') +
+      '<label for="fMonto">¿Cuánto le llegó? (' + simbolo() + ')</label>' +
+      '<input id="fMonto" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00">' +
+      campoFecha('fFecha', '¿Qué día llegó?') +
+      '<label for="fComo">¿Por dónde llegó? (opcional)</label>' +
+      '<input id="fComo" type="text" placeholder="Western Union">' +
+      '<label for="fNota">Nota (opcional)</label>' +
+      '<input id="fNota" type="text">',
+      function(){
+        var monto = numero('fMonto'), f = val('fFecha');
+        if (!monto){ aviso('#hojaAviso', 'Escriba cuánto le llegó.'); return Promise.resolve(false); }
+        if (!f){ aviso('#hojaAviso', 'Ponga el día.'); return Promise.resolve(false); }
+        return pedir('/rest/v1/casa_envios', { metodo:'POST', cuerpo:{
+          casa_id:S.casa.id, mandado_el:f, llego_el:f, gtq:monto,
+          como:val('fComo') || null, nota:val('fNota') || null,
+          anoto:S.miNombre, confirmo:S.miNombre, confirmado:new Date().toISOString()
+        }}).then(function(r){
+          if (!r.ok) return leerError(r).then(function(m){ throw new Error(m); });
+          return true;
+        });
+      });
+  }
+
+  function hojaMande(){
+    abrirHoja('Mandé dinero',
+      '<label for="fMonto">¿Cuánto mandó? (dólares)</label>' +
+      '<input id="fMonto" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00">' +
+      campoFecha('fFecha', '¿Qué día lo mandó?') +
+      '<label for="fComo">¿Por dónde? (opcional)</label>' +
+      '<input id="fComo" type="text" placeholder="Western Union">' +
+      '<label for="fNota">Nota (opcional)</label>' +
+      '<input id="fNota" type="text">' +
+      '<div class="sub" style="margin-top:14px">Va a quedar como <b>en camino</b> hasta que ella diga cuántos ' +
+        simbolo() + ' le llegaron. El app no adivina el cambio.</div>',
+      function(){
+        var monto = numero('fMonto'), f = val('fFecha');
+        if (!monto){ aviso('#hojaAviso', 'Escriba cuánto mandó.'); return Promise.resolve(false); }
+        if (!f){ aviso('#hojaAviso', 'Ponga el día.'); return Promise.resolve(false); }
+        return pedir('/rest/v1/casa_envios', { metodo:'POST', cuerpo:{
+          casa_id:S.casa.id, mandado_el:f, usd:monto,
+          como:val('fComo') || null, nota:val('fNota') || null, anoto:S.miNombre
+        }}).then(function(r){
+          if (!r.ok) return leerError(r).then(function(m){ throw new Error(m); });
+          return true;
+        });
+      });
+  }
+
+  function hojaLlego(id){
+    var e = S.envios.filter(function(x){ return x.id === id; })[0];
+    if (!e) return;
+    abrirHoja('Ya llegó',
+      '<div class="aviso bien">Salieron ' + usd(cent(e.usd)) + ' el ' + esc(fecha(e.mandado_el)) +
+        (e.como ? ' por ' + esc(e.como) : '') + '.</div>' +
+      '<label for="fMonto">¿Cuántos ' + simbolo() + ' le llegaron a la mano?</label>' +
+      '<input id="fMonto" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00">' +
+      campoFecha('fFecha', '¿Qué día llegó?') +
+      '<div class="sub" style="margin-top:14px">Ponga lo que de verdad recibió, ya sin lo que cobró el ' +
+        'servicio. Ese es el número que cuenta.</div>',
+      function(){
+        var monto = numero('fMonto'), f = val('fFecha');
+        if (!monto){ aviso('#hojaAviso', 'Escriba cuánto le llegó.'); return Promise.resolve(false); }
+        if (!f){ aviso('#hojaAviso', 'Ponga el día.'); return Promise.resolve(false); }
+        return pedir('/rest/v1/casa_envios?id=eq.' + id, { metodo:'PATCH', cuerpo:{
+          gtq:monto, llego_el:f, confirmo:S.miNombre, confirmado:new Date().toISOString()
+        }}).then(function(r){
+          if (!r.ok) return leerError(r).then(function(m){ throw new Error(m); });
+          return true;
+        });
+      });
+  }
+
+  function hojaInvitar(){
+    abrirHoja('Invitar a alguien',
+      '<p class="sub" style="margin-top:0">Ella se registra en el app con este mismo correo y entra sola a ' +
+        'este fondo. Si escribe otro correo, no va a entrar.</p>' +
+      '<label for="fCorreo">Su correo</label>' +
+      '<input id="fCorreo" type="email" inputmode="email" autocapitalize="off" spellcheck="false" placeholder="correo@ejemplo.com">' +
+      '<label for="fNombre">¿Cómo se llama?</label>' +
+      '<input id="fNombre" type="text" placeholder="Su nombre">',
+      function(){
+        var c = val('fCorreo').toLowerCase(), n = val('fNombre');
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c)){ aviso('#hojaAviso', 'Revise el correo.'); return Promise.resolve(false); }
+        if (!n){ aviso('#hojaAviso', 'Ponga su nombre.'); return Promise.resolve(false); }
+        return pedir('/rest/v1/rpc/casa_invitar', { metodo:'POST', cuerpo:{ p_casa:S.casa.id, p_email:c, p_nombre:n }})
+          .then(function(r){
+            if (!r.ok) return leerError(r).then(function(m){ throw new Error(m); });
+            alert('Listo. Mándele el enlace del app y dígale que se registre con ' + c + '.');
+            return true;
+          });
+      });
+  }
+
+  // ====== MENU ================================================
+  function hojaMenu(){
+    var h = '';
+    if (S.soyDueno){
+      h += '<button class="btn" data-menu="invitar" style="margin-bottom:10px">Invitar a alguien</button>';
+      h += '<button class="btn" data-menu="cats" style="margin-bottom:10px">Cambiar la lista de gastos</button>';
+    }
+    h += '<div class="sub" style="margin:14px 0">Entró como ' + esc(S.correo || '') +
+         ' · ' + esc(S.miNombre) + (S.soyDueno ? ' (dueño)' : '') + '</div>';
+    h += '<button class="btn claro" data-menu="salir">Cerrar sesión</button>';
+    abrirHoja('Opciones', h, null);
+  }
+
+  function hojaCats(){
+    var h = '<p class="sub" style="margin-top:0">Esta es la lista que ella escoge cuando apunta un gasto.</p>';
+    S.cats.forEach(function(c){
+      h += '<div class="fila"><div class="izq"><div class="qué">' + esc(c.nombre) + '</div></div>' +
+           '<button class="btn chico claro" data-quitar-cat="' + esc(c.nombre) + '">Quitar</button></div>';
+    });
+    h += '<label for="fCatNueva">Agregar una</label>' +
+         '<input id="fCatNueva" type="text" placeholder="Pintura">' +
+         '<div style="height:10px"></div>' +
+         '<button class="btn verde" data-menu="addcat">Agregar</button>';
+    abrirHoja('En qué se gasta', h, null);
+  }
+
+  function agregarCat(){
+    var n = val('fCatNueva');
+    if (!n) return;
+    var orden = S.cats.length ? Math.max.apply(null, S.cats.map(function(c){ return c.orden || 0; })) + 1 : 1;
+    pedir('/rest/v1/casa_categorias', { metodo:'POST', cuerpo:{
+      casa_id:S.casa.id, nombre:n, orden:orden
+    }}).then(function(r){
+      if (!r.ok) return leerError(r).then(function(m){ throw new Error(m); });
+      return cargar().then(function(){ pintar(); hojaCats(); });
+    }).catch(function(e){ aviso('#hojaAviso', 'No se pudo agregar: ' + e.message); });
+  }
+
+  function quitarCat(nombre){
+    // No se borra: se apaga. Los gastos viejos siguen diciendo su categoria.
+    pedir('/rest/v1/casa_categorias?casa_id=eq.' + S.casa.id + '&nombre=eq.' + encodeURIComponent(nombre),
+          { metodo:'PATCH', cuerpo:{ activa:false } })
+      .then(function(r){
+        if (!r.ok) return leerError(r).then(function(m){ throw new Error(m); });
+        return cargar().then(function(){ pintar(); hojaCats(); });
+      }).catch(function(e){ aviso('#hojaAviso', 'No se pudo quitar: ' + e.message); });
+  }
+
+  function borrarEnvio(id){
+    if (!confirm('¿Borrar este envío? Solo hágalo si nunca salió el dinero.')) return;
+    pedir('/rest/v1/casa_envios?id=eq.' + id, { metodo:'DELETE' })
+      .then(function(r){
+        if (!r.ok) return leerError(r).then(function(m){ throw new Error(m); });
+        return cargar().then(pintar);
+      }).catch(function(e){ aviso('#appAviso', 'No se pudo borrar: ' + e.message); });
+  }
+
+  // ====== ENTRAR / CREAR CUENTA ===============================
+  var modo = 'entrar';
+  function pintarPuerta(){
+    var crear = (modo === 'crear');
+    $('#pNombreCampo').hidden = !crear;
+    $('#pEntrar').textContent = crear ? 'Crear mi cuenta' : 'Entrar';
+    $('#pCambiar').textContent = crear ? 'Ya tengo cuenta · entrar' : 'No tengo cuenta · crear una';
+    $('#pClave').setAttribute('autocomplete', crear ? 'new-password' : 'current-password');
+    $('#puertaSub').textContent = crear ? 'Cuenta nueva' : 'El fondo de la casa';
+  }
+
+  function entrar(){
+    var correo = val('pCorreo').toLowerCase(), clave = $('#pClave').value || '';
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(correo)){ aviso('#puertaAviso', 'Revise el correo.'); return; }
+    if (clave.length < 6){ aviso('#puertaAviso', 'La contraseña necesita al menos 6 letras o números.'); return; }
+    if (modo === 'crear' && !val('pNombre')){ aviso('#puertaAviso', 'Ponga su nombre.'); return; }
+
+    var btn = $('#pEntrar');
+    btn.disabled = true; btn.textContent = 'Un momento…';
+    aviso('#puertaAviso', '');
+    S.correo = correo;
+    var ruta = (modo === 'crear') ? '/auth/v1/signup' : '/auth/v1/token?grant_type=password';
+
+    api(ruta, { metodo:'POST', cuerpo:{ email:correo, password:clave } })
+      .then(function(r){
+        return r.json().then(function(d){ return { ok:r.ok, d:d }; });
+      })
+      .then(function(x){
+        if (!x.ok){
+          var m = x.d.message || x.d.error_description || x.d.msg || 'No se pudo entrar.';
+          if (/invalid login/i.test(m)) m = 'El correo o la contraseña no coinciden.';
+          if (/already registered/i.test(m)) m = 'Ese correo ya tiene cuenta. Toque "Ya tengo cuenta · entrar".';
+          throw new Error(m);
+        }
+        if (!x.d.access_token){
+          throw new Error('La cuenta se creó pero pide confirmar el correo. ' +
+            'Hay que apagar esa opción en Supabase (Authentication → Sign In / Providers → Confirm email).');
+        }
+        tomarSesion(x.d);
+        if (modo === 'crear') S.nombreNuevo = val('pNombre');
+        return arrancarSesion();
+      })
+      .catch(function(e){ aviso('#puertaAviso', e.message); })
+      .then(function(){ btn.disabled = false; pintarPuerta(); });
+  }
+
+  function arrancarSesion(){
+    return cargar().then(function(casa){
+      if (!casa){
+        $('#aYo').value = S.nombreNuevo || (S.correo || '').split('@')[0];
+        $('#esperaCorreo').textContent = 'Su correo: ' + (S.correo || '');
+        ver('armar');
+        return;
+      }
+      return colaVaciar().then(function(n){
+        if (n > 0) return cargar();
+      }).then(function(){
+        pintar(); ver('app');
+      });
+    }).catch(function(e){
+      if (String(e.message) === 'sesion-vencida'){ olvidarSesion(); ver('puerta'); return; }
+      aviso('#puertaAviso', 'No se pudo cargar: ' + e.message);
+      ver('puerta');
+    });
+  }
+
+  function crearFondo(){
+    var nombre = val('aNombre'), yo = val('aYo'), mon = val('aMoneda').split('|');
+    if (!nombre){ aviso('#armarAviso', 'Póngale un nombre al fondo.'); return; }
+    if (!yo){ aviso('#armarAviso', 'Ponga su nombre.'); return; }
+    var btn = $('#aCrear');
+    btn.disabled = true; btn.textContent = 'Creando…';
+    pedir('/rest/v1/rpc/casa_crear', { metodo:'POST', cuerpo:{
+      p_nombre:nombre, p_moneda:mon[0], p_simbolo:mon[1] || 'Q', p_mi_nombre:yo
+    }}).then(function(r){
+      if (!r.ok) return leerError(r).then(function(m){ throw new Error(m); });
+      return cargar().then(function(){ pintar(); ver('app'); });
+    }).catch(function(e){ aviso('#armarAviso', 'No se pudo crear: ' + e.message); })
+      .then(function(){ btn.disabled = false; btn.textContent = 'Crear el fondo'; });
+  }
+
+  function salir(){ olvidarSesion(); S.casa = null; ver('puerta'); }
+
+  // ====== ARRANQUE ============================================
+  function arrancar(){
+    $('#verTag').textContent = APP_BUILD;
+    pintarPuerta();
+
+    $('#pEntrar').addEventListener('click', entrar);
+    $('#pClave').addEventListener('keydown', function(e){ if (e.key === 'Enter') entrar(); });
+    $('#pCambiar').addEventListener('click', function(){
+      modo = (modo === 'crear') ? 'entrar' : 'crear';
+      aviso('#puertaAviso', ''); pintarPuerta();
+    });
+    $('#aCrear').addEventListener('click', crearFondo);
+    $('#esperaSalir').addEventListener('click', salir);
+    $('#btnRefrescar').addEventListener('click', function(){
+      aviso('#appAviso', '');
+      colaVaciar().then(function(){ return cargar(); }).then(pintar)
+        .catch(function(e){ aviso('#appAviso', 'No se pudo refrescar: ' + e.message); });
+    });
+    $('#btnMenu').addEventListener('click', hojaMenu);
+    $('#btnGaste').addEventListener('click', hojaGaste);
+    $('#btnEntro').addEventListener('click', hojaEntro);
+    $('#btnMande').addEventListener('click', hojaMande);
+    $('#hojaCerrar').addEventListener('click', cerrarHoja);
+    $('#visorCerrar').addEventListener('click', function(){ $('#visor').hidden = true; $('#visorImg').src = ''; });
+
+    $('#hojaGuardar').addEventListener('click', function(){
+      if (!hojaAccion) return;
+      var btn = this;
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      Promise.resolve(hojaAccion()).then(function(res){
+        if (res === true || res === 'cola'){
+          var mensajeCola = (res === 'cola');
+          return cargar().then(function(){
+            pintar();
+            if (mensajeCola){
+              aviso('#appAviso', 'Su gasto quedó guardado en el teléfono y se manda solo cuando haya internet.', 'ojo');
+              setTimeout(function(){ cerrarHoja(); }, 1200);
+            } else {
+              cerrarHoja();
+            }
+          });
+        }
+      }).catch(function(e){
+        aviso('#hojaAviso', 'No se pudo guardar: ' + e.message);
+      }).then(function(){
+        btn.disabled = false; btn.textContent = 'Guardar';
+      });
+    });
+
+    // un solo oyente para todo lo que se pinta
+    document.addEventListener('click', function(ev){
+      var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu]') : null;
+      if (!t) return;
+      if (t.dataset.llego){ hojaLlego(t.dataset.llego); return; }
+      if (t.dataset.foto){ abrirFoto(t.dataset.foto); return; }
+      if (t.dataset.quitarEnvio){ borrarEnvio(t.dataset.quitarEnvio); return; }
+      if (t.dataset.quitarCat){ quitarCat(t.dataset.quitarCat); return; }
+      var m = t.dataset.menu;
+      if (m === 'invitar') hojaInvitar();
+      else if (m === 'cats') hojaCats();
+      else if (m === 'addcat') agregarCat();
+      else if (m === 'salir') salir();
+    });
+
+    if (!configurado()){
+      aviso('#puertaAviso', 'Todavía falta conectar la base de datos. Amilcar: dígale a Claude que ya creó el proyecto de Supabase.', 'ojo');
+      return;
+    }
+    if (leerSesion()) arrancarSesion(); else ver('puerta');
+  }
+
+  // Nada de esperar un frame: si el app se abre en una pestana que el
+  // sistema no esta pintando, requestAnimationFrame no corre nunca.
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arrancar);
+  else arrancar();
+
+  // para las pruebas
+  window.__casa = { cent:cent, deCent:deCent, llego:llego, recibidoCent:recibidoCent,
+    gastadoCent:gastadoCent, saldoCent:saldoCent, mandadoUsdCent:mandadoUsdCent,
+    enCaminoUsdCent:enCaminoUsdCent, ultimoCambio:ultimoCambio, porCategoria:porCategoria, S:S };
+})();
+</script>
+</body>
+</html>
