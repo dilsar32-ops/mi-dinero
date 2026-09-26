@@ -23,7 +23,7 @@
     --r:14px;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
-  html,body{margin:0; padding:0}
+  html,body{margin:0; padding:0; touch-action:manipulation}
   body{
     background:var(--fondo); color:var(--texto);
     font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -76,6 +76,8 @@
   .btn.claro{background:transparent}
   .btn.chico{min-height:38px; font-size:14px; font-weight:500; width:auto; padding:8px 14px}
   .dos{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .tres{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px}
+  .tres .btn{padding:12px 6px; font-size:14px; line-height:1.2; min-height:58px}
 
   label{display:block; font-size:13px; color:var(--suave); margin:14px 0 6px}
   input,select,textarea{
@@ -200,12 +202,12 @@
     <div id="caminoCaja"></div>
 
     <!-- botones de accion -->
-    <div class="dos" style="margin-bottom:14px">
-      <button class="btn verde" id="btnEntro">+ Entró dinero</button>
+    <div class="tres" style="margin-bottom:14px">
+      <button class="btn verde" id="btnEntro">+ Entró<br>dinero</button>
       <button class="btn" id="btnGaste">− Gasté</button>
+      <button class="btn" id="btnPreste">→ Presté<br>dinero</button>
+      <button class="btn" id="btnMande" hidden>Mandé<br>dinero →</button>
     </div>
-    <button class="btn" id="btnPreste" style="margin-bottom:14px">→ Presté dinero</button>
-    <button class="btn" id="btnMande" hidden style="margin-bottom:14px">Mandé dinero →</button>
 
     <!-- solo el dueno: resumen -->
     <div class="tarjeta" id="cajaDueno" hidden>
@@ -260,6 +262,7 @@
     <div id="hojaCuerpo"></div>
     <div style="height:18px"></div>
     <button class="btn verde" id="hojaGuardar">Guardar</button>
+    <button class="btn claro" id="hojaAtras" style="margin-top:10px">← Regresar</button>
   </div>
 </div>
 
@@ -271,7 +274,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-26-P';
+  var APP_BUILD = '2026-09-26-Q';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -688,7 +691,8 @@
     pintarDestino();
     pintarMovimientos();
 
-    $('#btnMande').hidden = !S.soyDueno;
+    $('#btnMande').hidden  = !S.soyDueno;
+    $('#btnPreste').hidden =  S.soyDueno;
     $('#cajaDueno').hidden = !S.soyDueno;
     $('#cajaCats').hidden = !S.gastos.length;
     $('#movTitulo').textContent = 'Todo lo que ha pasado';
@@ -764,16 +768,17 @@
 
   // Las tres listas (categorias, de donde vino, a quien se le pago) se
   // dibujan igual: barra proporcional y su porcentaje del total.
-  function pintarBarras(donde, filas, totalCent){
+  function pintarBarras(donde, filas, totalCent, grupo){
     var caja = $(donde);
     if (!caja) return false;
     if (!filas.length){ caja.innerHTML = ''; return false; }
     var mayor = filas[0].cent || 1, total = totalCent || 1, h = '';
     filas.forEach(function(c){
       var pct = Math.round((c.cent / total) * 100);
-      h += '<div class="catfila">' +
+      h += '<div class="catfila" style="cursor:pointer"' +
+           (grupo ? ' data-grupo="' + esc(grupo) + '" data-quien="' + esc(c.nombre) + '"' : '') + '>' +
         '<div class="n">' + esc(c.nombre) + ' <span class="chip">' + pct + '%</span></div>' +
-        '<div class="v">' + plata(c.cent) + '</div>' +
+        '<div class="v">' + plata(c.cent) + ' ›</div>' +
         '<div class="b"><div class="barrita" style="width:' +
            Math.max(3, Math.round((c.cent / mayor) * 100)) + '%"></div></div>' +
         '</div>';
@@ -782,16 +787,67 @@
     return true;
   }
 
+  // Al tocar una barra: TODO lo que hay detras de ese numero. Su queja:
+  // "cien por ciento hermana Estela, pero no me da mas informacion".
+  function hojaGrupo(grupo, quien){
+    var sinAnotar = quien === 'Sin anotar';
+    function coincide(v){ var t = (v || '').trim(); return sinAnotar ? !t : t === quien; }
+    var titulo = '', lineas = [], total = 0;
+
+    if (grupo === 'origen' || grupo === 'receptor'){
+      titulo = grupo === 'origen' ? 'Dinero que vino de ' + quien : 'Lo que ha recibido ' + quien;
+      (S.envios || []).forEach(function(e){
+        if (!llego(e)) return;
+        if (!coincide(grupo === 'origen' ? e.de_quien : e.recibio)) return;
+        total += cent(e.gtq);
+        lineas.push({ f:e.llego_el, monto:cent(e.gtq), tipo:'entra',
+          qué:'Entró dinero' + (e.como ? ' · ' + e.como : ''),
+          pie:[grupo === 'origen' && e.recibio ? 'lo recibió ' + e.recibio : '',
+               grupo === 'receptor' && e.de_quien ? 'de ' + e.de_quien : '',
+               S.soyDueno && e.usd ? 'salieron ' + usd(cent(e.usd)) : '',
+               e.nota || ''].filter(Boolean).join(' · ') });
+      });
+    } else {
+      titulo = grupo === 'destino' ? 'Lo que se le ha pagado a ' + quien
+                                   : 'Gastos de ' + quien;
+      (S.gastos || []).forEach(function(g){
+        if (!coincide(grupo === 'destino' ? g.a_quien : g.categoria)) return;
+        total += cent(g.gtq);
+        lineas.push({ f:g.gastado_el, monto:cent(g.gtq), tipo:'sale', foto:g.foto,
+          qué:grupo === 'destino' ? g.categoria : (g.a_quien ? 'a ' + g.a_quien : 'Gasto'),
+          pie:[g.nota || '', g.anoto ? 'anotó ' + g.anoto : ''].filter(Boolean).join(' · ') });
+      });
+    }
+
+    lineas.sort(function(a, b){ return String(b.f).localeCompare(String(a.f)); });
+    var h = '<div class="fila"><div class="izq" style="flex:1"><div class="qué">' +
+            lineas.length + (lineas.length === 1 ? ' movimiento' : ' movimientos') +
+            '</div></div><div class="monto">' + plata(total) + '</div></div>' +
+            '<div style="height:10px"></div>';
+    lineas.forEach(function(x){
+      h += '<div class="fila">' +
+        (x.foto ? '<img class="miniftgr" data-foto="' + esc(x.foto) + '" alt="Recibo">' : '') +
+        '<div class="izq" style="flex:1">' +
+          '<div class="qué">' + esc(x.qué) + '</div>' +
+          '<div class="cuando">' + esc(fecha(x.f)) + (x.pie ? ' · ' + esc(x.pie) : '') + '</div>' +
+        '</div>' +
+        '<div class="monto ' + x.tipo + '">' + (x.tipo === 'entra' ? '+' : '−') + ' ' +
+          plata(x.monto) + '</div></div>';
+    });
+    if (!lineas.length) h = '<div class="sub">No hay nada apuntado aquí.</div>';
+    abrirHoja(titulo, h, null);
+  }
+
   function pintarOrigen(){
     var f = porOrigen(S.envios);
-    var hay = pintarBarras('#listaOrigen', f, recibidoCent(S.envios));
+    var hay = pintarBarras('#listaOrigen', f, recibidoCent(S.envios), 'origen');
     $('#cajaOrigen').hidden = !hay;
   }
   function pintarDestino(){
     var f = porDestino(S.gastos);
     // Si TODO esta sin anotar, la tarjeta no dice nada util: se esconde.
     var util = f.length > 1 || (f.length === 1 && f[0].nombre !== 'Sin anotar');
-    var hay = util && pintarBarras('#listaDestino', f, gastadoCent(S.gastos));
+    var hay = util && pintarBarras('#listaDestino', f, gastadoCent(S.gastos), 'destino');
     $('#cajaDestino').hidden = !hay;
   }
 
@@ -799,24 +855,12 @@
     var f = porReceptor(S.envios);
     var distintos = f.filter(function(x){ return x.nombre !== 'Sin anotar'; }).length;
     var util = distintos > 1;            // con un solo nombre no aporta nada
-    var hay = util && pintarBarras('#listaReceptor', f, recibidoCent(S.envios));
+    var hay = util && pintarBarras('#listaReceptor', f, recibidoCent(S.envios), 'receptor');
     $('#cajaReceptor').hidden = !hay;
   }
 
   function pintarCats(){
-    var cats = porCategoria(S.gastos);
-    if (!cats.length){ $('#listaCats').innerHTML = ''; return; }
-    var mayor = cats[0].cent || 1, total = gastadoCent(S.gastos), h = '';
-    cats.forEach(function(c){
-      var pct = Math.round((c.cent / total) * 100);
-      h += '<div class="catfila">' +
-        '<div class="n">' + esc(c.nombre) + ' <span class="chip">' + pct + '%</span></div>' +
-        '<div class="v">' + plata(c.cent) + '</div>' +
-        '<div class="b"><div class="barrita" style="width:' +
-           Math.max(3, Math.round((c.cent / mayor) * 100)) + '%"></div></div>' +
-        '</div>';
-    });
-    $('#listaCats').innerHTML = h;
+    pintarBarras('#listaCats', porCategoria(S.gastos), gastadoCent(S.gastos), 'cat');
   }
 
   function pintarMovimientos(){
@@ -953,6 +997,8 @@
     $('#hojaCuerpo').innerHTML = cuerpo;
     aviso('#hojaAviso', '');
     hojaAccion = accion;
+    $('#hojaGuardar').hidden = !accion;          // hoja de solo leer
+    $('#hojaAtras').textContent = accion ? '← Regresar' : '← Regresar';
     ver('hoja');
   }
   function cerrarHoja(){ hojaAccion = null; ver('app'); }
@@ -1519,10 +1565,26 @@
     $('#aCrear').addEventListener('click', crearFondo);
     $('#esperaSalir').addEventListener('click', salir);
     $('#armarSalir').addEventListener('click', salir);
+    $('#hojaAtras').addEventListener('click', cerrarHoja);
     $('#btnRefrescar').addEventListener('click', function(){
+      var b = this, antes = b.textContent;
+      if (b.disabled) return;
+      b.disabled = true; b.textContent = 'Un momento…';
       aviso('#appAviso', '');
-      colaVaciar().then(function(){ return cargar(); }).then(pintar)
-        .catch(function(e){ aviso('#appAviso', 'No se pudo refrescar: ' + e.message); });
+      var eran = (S.envios || []).length + (S.gastos || []).length +
+                 (S.prestamos || []).length + (S.abonos || []).length;
+      colaVaciar().then(function(){ return cargar(); }).then(function(){
+        pintar();
+        var hay = (S.envios || []).length + (S.gastos || []).length +
+                  (S.prestamos || []).length + (S.abonos || []).length;
+        b.textContent = hay > eran ? (hay - eran) + ' nuevo' + (hay - eran === 1 ? '' : 's')
+                                   : 'Al día';
+      }).catch(function(e){
+        b.textContent = 'Sin señal';
+        aviso('#appAviso', 'No se pudo refrescar: ' + e.message);
+      }).then(function(){
+        setTimeout(function(){ b.textContent = antes; b.disabled = false; }, 2200);
+      });
     });
     $('#btnMenu').addEventListener('click', hojaMenu);
     $('#btnGaste').addEventListener('click', hojaGaste);
@@ -1564,8 +1626,9 @@
     });
 
     document.addEventListener('click', function(ev){
-      var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu],[data-foto-tomar],[data-foto-galeria],[data-foto-quitar],[data-prest],[data-saldar],[data-borrar-prest]') : null;
+      var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu],[data-foto-tomar],[data-foto-galeria],[data-foto-quitar],[data-prest],[data-saldar],[data-borrar-prest],[data-grupo]') : null;
       if (!t) return;
+      if (t.dataset.grupo){ hojaGrupo(t.dataset.grupo, t.dataset.quien); return; }
       if (t.dataset.saldar){ saldarPrestamo(t.dataset.saldar); return; }
       if (t.dataset.borrarPrest){ borrarPrestamo(t.dataset.borrarPrest); return; }
       if (t.dataset.prest){ hojaPrestamo(t.dataset.prest); return; }
