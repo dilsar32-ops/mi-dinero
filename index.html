@@ -193,6 +193,7 @@
       <button class="btn verde" id="btnEntro">+ Entró dinero</button>
       <button class="btn" id="btnGaste">− Gasté</button>
     </div>
+    <button class="btn" id="btnPreste" style="margin-bottom:14px">→ Presté dinero</button>
     <button class="btn" id="btnMande" hidden style="margin-bottom:14px">Mandé dinero →</button>
 
     <!-- solo el dueno: resumen -->
@@ -210,6 +211,11 @@
     <div class="tarjeta" id="cajaOrigen" hidden>
       <h2>De dónde vino el dinero</h2>
       <div id="listaOrigen"></div>
+    </div>
+
+    <div class="tarjeta" id="cajaDeben" hidden>
+      <h2>Quién nos debe</h2>
+      <div id="listaDeben"></div>
     </div>
 
     <div class="tarjeta" id="cajaReceptor" hidden>
@@ -254,7 +260,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-26-L';
+  var APP_BUILD = '2026-09-26-M';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -295,8 +301,11 @@
     return t;
   }
   // Lo que ella tiene en la mano AHORA, en su moneda.
-  function saldoCent(envios, gastos){
-    return recibidoCent(envios) - gastadoCent(gastos);
+  // Lo prestado SALE del fondo (ese dinero ya no esta en la casa) y lo
+  // que abonan REGRESA. Decision suya: "para que se pueda deducir".
+  function saldoCent(envios, gastos, prestamos, abonos){
+    return recibidoCent(envios) - gastadoCent(gastos)
+         - prestadoCent(prestamos) + abonadoCent(abonos);
   }
   // Dolares que el ha mandado en total (haya llegado o no).
   function mandadoUsdCent(envios){
@@ -386,11 +395,107 @@
             .sort(function(a, b){ return b.cent - a.cent; });
   }
 
+  // ---- LO QUE LE DEBEN A UNO --------------------------------
+  // Decision suya: el interes es un % POR MES y corre por MESES
+  // CUMPLIDOS. A los 40 dias todavia va un mes. Asi el numero no
+  // cambia solo de un dia para otro y se le puede decir a la persona
+  // "van dos meses, son Q100" sin que nadie lo discuta.
+  function diasDelMes(y, m){                      // m: 1-12
+    if (m === 2) return ((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0) ? 29 : 28;
+    return [31,28,31,30,31,30,31,31,30,31,30,31][m - 1];
+  }
+  function partes(iso){
+    var p = String(iso || '').slice(0, 10).split('-');
+    return { y:+p[0], m:+p[1], d:+p[2] };
+  }
+  function isoDe(y, m, d){
+    return y + '-' + String(m).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+  }
+  // El dia 31 mas un mes cae en un mes que no tiene 31: se queda en el
+  // ultimo dia. Es lo que entiende cualquiera por "el mismo dia".
+  function sumarMeses(iso, n){
+    var a = partes(iso);
+    var t = (a.m - 1) + n;
+    var y = a.y + Math.floor(t / 12), m = (t % 12 + 12) % 12 + 1;
+    return isoDe(y, m, Math.min(a.d, diasDelMes(y, m)));
+  }
+  function mesesCumplidos(desde, hasta){
+    var a = partes(desde), b = partes(hasta);
+    if (!a.y || !b.y) return 0;
+    var n = (b.y - a.y) * 12 + (b.m - a.m);
+    if (b.d < Math.min(a.d, diasDelMes(b.y, b.m))) n -= 1;
+    return Math.max(0, n);
+  }
+
+  // La cuenta de UN prestamo. Cada mes cumplido le suma el interes
+  // sobre lo que TODAVIA debe de capital -- no sobre lo ya pagado.
+  // Cuando abona, primero se cubre el interes que ya corrio y lo que
+  // sobra baja el capital. Si ya se marco saldado, el interes deja de
+  // correr ese dia.
+  function cuentaPrestamo(p, abonos, hoyISO){
+    var tasa = Number((p && p.interes_mes) || 0) / 100;
+    if (!isFinite(tasa) || tasa < 0) tasa = 0;
+    var capital = cent(p && p.gtq), interes = 0;
+    var desde = (p && p.prestado_el) || hoyISO;
+    var fin = (p && p.saldado_el) || hoyISO;
+    var meses = tasa > 0 ? mesesCumplidos(desde, fin) : 0;
+
+    var ev = [];
+    for (var i = 1; i <= meses; i++) ev.push({ f: sumarMeses(desde, i), tipo:'mes' });
+    (abonos || []).forEach(function(a){
+      if (a && a.gtq) ev.push({ f:String(a.pagado_el || '').slice(0,10), tipo:'abono', c:cent(a.gtq) });
+    });
+    // Si un abono cae el mismo dia que se cumple el mes, primero corre
+    // el interes: ese mes ya se gano.
+    ev.sort(function(x, y){
+      if (x.f !== y.f) return x.f < y.f ? -1 : 1;
+      return (x.tipo === 'mes' ? 0 : 1) - (y.tipo === 'mes' ? 0 : 1);
+    });
+
+    var aFavor = 0;
+    ev.forEach(function(e){
+      if (e.tipo === 'mes'){ interes += Math.round(capital * tasa); return; }
+      var pago = e.c;
+      var aInt = Math.min(pago, interes);
+      interes -= aInt; pago -= aInt;
+      if (pago > capital){ aFavor += pago - capital; capital = 0; }
+      else capital -= pago;
+    });
+
+    var abonado = 0;
+    (abonos || []).forEach(function(a){ abonado += cent(a && a.gtq); });
+    return { capital:capital, interes:interes, debe:capital + interes,
+             meses:meses, abonado:abonado, aFavor:aFavor };
+  }
+
+  // Todo junto: quien debe cuanto, de mayor a menor.
+  function cuentaPrestamos(prestamos, abonos, hoyISO){
+    var porP = {};
+    (abonos || []).forEach(function(a){
+      if (!a) return;
+      (porP[a.prestamo_id] = porP[a.prestamo_id] || []).push(a);
+    });
+    return (prestamos || []).map(function(p){
+      return { id:p.id, aQuien:(p.a_quien || '').trim() || 'Sin anotar',
+               p:p, abonos:porP[p.id] || [], cuenta:cuentaPrestamo(p, porP[p.id], hoyISO) };
+    }).sort(function(a, b){ return b.cuenta.debe - a.cuenta.debe; });
+  }
+  function debenCent(filas){
+    var t = 0; (filas || []).forEach(function(f){ t += f.cuenta.debe; }); return t;
+  }
+  // Plata que salio del fondo por prestar, y la que ha regresado.
+  function prestadoCent(prestamos){
+    var t = 0; (prestamos || []).forEach(function(p){ t += cent(p && p.gtq); }); return t;
+  }
+  function abonadoCent(abonos){
+    var t = 0; (abonos || []).forEach(function(a){ t += cent(a && a.gtq); }); return t;
+  }
+
   // ====== FIN DE LAS CUENTAS ==================================
 
   var S = { tok:null, ref:null, correo:null, uid:null, vence:0,
             casa:null, soyDueno:false, miNombre:'', envios:[], gastos:[], cats:[],
-            miembros:[], invitados:[] };
+            miembros:[], invitados:[], prestamos:[], abonos:[] };
 
   function $(s){ return document.querySelector(s); }
   function esc(t){
@@ -525,7 +630,9 @@
           pedir('/rest/v1/casa_categorias?select=nombre,orden,activa&casa_id=eq.' + S.casa.id + '&activa=eq.true&order=orden'),
           // Solo el dueno ve esto; a ella la base le devuelve una lista
           // vacia y no pasa nada.
-          pedir('/rest/v1/casa_invitaciones?select=nombre&casa_id=eq.' + S.casa.id)
+          pedir('/rest/v1/casa_invitaciones?select=nombre&casa_id=eq.' + S.casa.id),
+          pedir('/rest/v1/casa_prestamos?select=*&casa_id=eq.' + S.casa.id + '&order=prestado_el.desc'),
+          pedir('/rest/v1/casa_abonos?select=*&casa_id=eq.' + S.casa.id + '&order=pagado_el')
         ]).then(function(rs){
           return Promise.all(rs.map(function(r){ return r.ok ? r.json() : []; }));
         }).then(function(d){
@@ -535,6 +642,7 @@
           S.miNombre = yo.nombre; S.soyDueno = !!yo.dueno;
           S.envios = d[1]; S.gastos = d[2]; S.cats = d[3];
           S.invitados = d[4] || [];
+          S.prestamos = d[5] || []; S.abonos = d[6] || [];
           return S.casa;
         });
       });
@@ -542,7 +650,7 @@
 
   // ====== PINTAR ==============================================
   function pintar(){
-    var sc = saldoCent(S.envios, S.gastos);
+    var sc = saldoCent(S.envios, S.gastos, S.prestamos, S.abonos);
     $('#tituloFondo').textContent = S.casa.nombre;
     $('#granLbl').textContent = S.soyDueno ? 'Le queda a ' + primerNombre() : 'Le queda';
     var num = $('#granNum');
@@ -557,6 +665,7 @@
     pintarDueno();
     pintarCats();
     pintarOrigen();
+    pintarDeben();
     pintarReceptor();
     pintarDestino();
     pintarMovimientos();
@@ -596,7 +705,7 @@
   function pintarDueno(){
     if (!S.soyDueno) return;
     var mandado = mandadoUsdCent(S.envios), camino = enCaminoUsdCent(S.envios);
-    var camb = ultimoCambio(S.envios), sc = saldoCent(S.envios, S.gastos);
+    var camb = ultimoCambio(S.envios), sc = saldoCent(S.envios, S.gastos, S.prestamos, S.abonos);
     var h = '';
     h += linea('Ha mandado en total', usd(mandado));
     if (camino > 0) h += linea('De eso, en camino', usd(camino), 'style="color:#e0a44a"');
@@ -893,6 +1002,153 @@
     var o = '<option value="">— escoja —</option>';
     S.cats.forEach(function(c){ o += '<option value="' + esc(c.nombre) + '">' + esc(c.nombre) + '</option>'; });
     return '<label for="fCat">¿En qué lo gastó?</label><select id="fCat">' + o + '</select>';
+  }
+
+  // ---- QUIEN NOS DEBE ----------------------------------------
+  function pintarDeben(){
+    var filas = cuentaPrestamos(S.prestamos, S.abonos, hoy());
+    var caja = $('#cajaDeben'), lista = $('#listaDeben');
+    if (!filas.length){ caja.hidden = true; lista.innerHTML = ''; return; }
+    caja.hidden = false;
+
+    var total = debenCent(filas), h = '';
+    filas.forEach(function(f){
+      var c = f.cuenta, pagado = c.debe <= 0;
+      h += '<div class="fila" data-prest="' + esc(f.id) + '" style="cursor:pointer">' +
+        '<div class="izq" style="flex:1">' +
+          '<div class="qué">' + esc(f.aQuien) + (pagado ? ' · ya pagó' : '') + '</div>' +
+          '<div class="cuando">' +
+            'Le prestó ' + plata(cent(f.p.gtq)) + ' el ' + esc(fecha(f.p.prestado_el)) +
+            (Number(f.p.interes_mes) > 0
+              ? ' · ' + Number(f.p.interes_mes) + '% al mes' +
+                (c.meses ? ' · van ' + c.meses + (c.meses === 1 ? ' mes' : ' meses') : ' · aún no cumple el mes')
+              : ' · sin interés') +
+            (c.abonado ? ' · ha abonado ' + plata(c.abonado) : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="monto ' + (pagado ? '' : 'sale') + '">' + plata(c.debe) + '</div>' +
+        '</div>';
+    });
+    h += '<div class="fila" style="border-top:1px solid var(--linea); margin-top:6px; padding-top:10px">' +
+         '<div class="izq" style="flex:1"><div class="qué">Total que nos deben</div></div>' +
+         '<div class="monto">' + plata(total) + '</div></div>';
+    h += '<div class="sub" style="margin-top:8px">Toque a una persona para anotarle un abono.</div>';
+    lista.innerHTML = h;
+  }
+
+  function hojaPreste(){
+    abrirHoja('Presté dinero',
+      campoPersona('fAQuien', '¿A quién le prestó?', 'El nombre de la persona', nombresDeDestino()) +
+      '<label for="fMonto">¿Cuánto le prestó? (' + simbolo() + ')</label>' +
+      '<input id="fMonto" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00">' +
+      campoFecha('fFecha', '¿Qué día se lo prestó?') +
+      '<label for="fInt">Interés por mes (opcional)</label>' +
+      '<input id="fInt" type="number" inputmode="decimal" step="0.1" min="0" max="100" placeholder="5">' +
+      '<div class="sub" style="margin-top:6px">En por ciento, por cada mes. Si no le cobra interés, ' +
+        'déjelo vacío. El interés corre por <b>meses cumplidos</b>: a los 40 días todavía va un mes.</div>' +
+      '<label for="fNota" style="margin-top:14px">Nota (opcional)</label>' +
+      '<input id="fNota" type="text" placeholder="Para qué se lo prestó, cuándo quedó de pagar…">' +
+      '<div class="aviso ojo" style="margin-top:14px">Este dinero sale del fondo de la casa. ' +
+        'Cuando le abonen, vuelve a entrar.</div>',
+      function(){
+        var quien = val('fAQuien'), monto = numero('fMonto'), f = val('fFecha');
+        var iv = val('fInt'), interes = iv === '' ? null : Number(iv);
+        if (!quien){ aviso('#hojaAviso', 'Escriba a quién le prestó.'); return Promise.resolve(false); }
+        if (!monto){ aviso('#hojaAviso', 'Escriba cuánto le prestó.'); return Promise.resolve(false); }
+        if (!f){ aviso('#hojaAviso', 'Ponga el día.'); return Promise.resolve(false); }
+        if (interes !== null && (!isFinite(interes) || interes < 0 || interes > 100)){
+          aviso('#hojaAviso', 'El interés va en por ciento, de 0 a 100.'); return Promise.resolve(false);
+        }
+        return pedir('/rest/v1/casa_prestamos', { metodo:'POST', cuerpo:{
+          casa_id:S.casa.id, a_quien:quien, prestado_el:f, gtq:monto,
+          interes_mes:interes, nota:val('fNota') || null, anoto:S.miNombre
+        }}).then(function(r){
+          if (!r.ok) return leerError(r).then(function(m){ throw new Error(m); });
+          return true;
+        });
+      });
+  }
+
+  // Al tocar una persona: su cuenta al detalle y el boton de abonar.
+  function hojaPrestamo(id){
+    var f = cuentaPrestamos(S.prestamos, S.abonos, hoy()).filter(function(x){ return x.id === id; })[0];
+    if (!f) return;
+    var c = f.cuenta, tasa = Number(f.p.interes_mes) || 0;
+
+    var h = '<div class="fila"><div class="izq" style="flex:1"><div class="qué">Le prestó</div></div>' +
+            '<div class="monto">' + plata(cent(f.p.gtq)) + '</div></div>';
+    h += '<div class="sub" style="margin-bottom:10px">El ' + esc(fecha(f.p.prestado_el)) +
+         (tasa > 0 ? ' · ' + tasa + '% al mes' : ' · sin interés') +
+         (f.p.nota ? ' · ' + esc(f.p.nota) : '') + '</div>';
+    if (tasa > 0){
+      h += '<div class="fila"><div class="izq" style="flex:1"><div class="qué">Interés de ' +
+           c.meses + (c.meses === 1 ? ' mes cumplido' : ' meses cumplidos') +
+           '</div></div><div class="monto">' + plata(c.interes) + '</div></div>';
+    }
+    if (c.abonado){
+      h += '<div class="fila"><div class="izq" style="flex:1"><div class="qué">Ha abonado</div></div>' +
+           '<div class="monto entra">− ' + plata(c.abonado) + '</div></div>';
+    }
+    h += '<div class="fila" style="border-top:1px solid var(--linea); padding-top:10px">' +
+         '<div class="izq" style="flex:1"><div class="qué">' +
+         (c.debe > 0 ? 'Debe hoy' : 'Ya no debe nada') + '</div></div>' +
+         '<div class="monto ' + (c.debe > 0 ? 'sale' : '') + '">' + plata(c.debe) + '</div></div>';
+    if (c.aFavor) h += '<div class="aviso ojo">Pagó ' + plata(c.aFavor) + ' de más.</div>';
+
+    if (f.abonos.length){
+      h += '<div class="sub" style="margin-top:14px">Lo que ha abonado</div>';
+      f.abonos.slice().sort(function(a,b){ return String(b.pagado_el).localeCompare(String(a.pagado_el)); })
+        .forEach(function(a){
+          h += '<div class="fila"><div class="izq" style="flex:1"><div class="cuando">' +
+               esc(fecha(a.pagado_el)) + (a.nota ? ' · ' + esc(a.nota) : '') +
+               '</div></div><div class="monto entra">' + plata(cent(a.gtq)) + '</div></div>';
+        });
+    }
+
+    h += '<label for="fMonto" style="margin-top:16px">¿Cuánto le abonó hoy? (' + simbolo() + ')</label>' +
+         '<input id="fMonto" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00">' +
+         campoFecha('fFecha', '¿Qué día le pagó?') +
+         '<label for="fNota">Nota (opcional)</label>' +
+         '<input id="fNota" type="text">';
+    if (tasa > 0){
+      h += '<div class="sub" style="margin-top:6px">De lo que abone, primero se cubre el interés ' +
+           'que ya corrió y lo que sobre le baja a lo prestado.</div>';
+    }
+    h += '<button class="btn claro" data-saldar="' + esc(f.id) + '" style="margin-top:16px">' +
+         (f.p.saldado_el ? 'Está marcado como pagado · reabrir' : 'Marcar como ya pagado del todo') + '</button>';
+    h += '<button class="btn claro" data-borrar-prest="' + esc(f.id) + '" style="margin-top:8px">Borrar este préstamo</button>';
+
+    abrirHoja('Cuenta de ' + f.aQuien, h, function(){
+      var monto = numero('fMonto'), fp = val('fFecha');
+      if (!monto){ aviso('#hojaAviso', 'Escriba cuánto le abonó.'); return Promise.resolve(false); }
+      if (!fp){ aviso('#hojaAviso', 'Ponga el día.'); return Promise.resolve(false); }
+      return pedir('/rest/v1/casa_abonos', { metodo:'POST', cuerpo:{
+        casa_id:S.casa.id, prestamo_id:f.id, pagado_el:fp, gtq:monto,
+        nota:val('fNota') || null, anoto:S.miNombre
+      }}).then(function(r){
+        if (!r.ok) return leerError(r).then(function(m){ throw new Error(m); });
+        return true;
+      });
+    });
+  }
+
+  function saldarPrestamo(id){
+    var p = S.prestamos.filter(function(x){ return x.id === id; })[0];
+    if (!p) return;
+    var abrir = !!p.saldado_el;
+    if (!abrir && !confirm('¿Marcar que ya terminó de pagar? El interés deja de correr hoy.')) return;
+    pedir('/rest/v1/casa_prestamos?id=eq.' + id, { metodo:'PATCH',
+      cuerpo:{ saldado_el: abrir ? null : hoy() } })
+      .then(function(r){ if (!r.ok) return leerError(r).then(function(m){ throw new Error(m); }); })
+      .then(function(){ cerrarHoja(); return cargar(); }).then(pintar)
+      .catch(function(e){ aviso('#hojaAviso', 'No se pudo: ' + e.message); });
+  }
+  function borrarPrestamo(id){
+    if (!confirm('¿Borrar este préstamo y todo lo que le abonaron? No se puede deshacer.')) return;
+    pedir('/rest/v1/casa_prestamos?id=eq.' + id, { metodo:'DELETE' })
+      .then(function(r){ if (!r.ok) return leerError(r).then(function(m){ throw new Error(m); }); })
+      .then(function(){ cerrarHoja(); return cargar(); }).then(pintar)
+      .catch(function(e){ aviso('#hojaAviso', 'No se pudo borrar: ' + e.message); });
   }
 
   function hojaGaste(){
@@ -1227,6 +1483,7 @@
     $('#btnMenu').addEventListener('click', hojaMenu);
     $('#btnGaste').addEventListener('click', hojaGaste);
     $('#btnEntro').addEventListener('click', hojaEntro);
+    $('#btnPreste').addEventListener('click', hojaPreste);
     $('#btnMande').addEventListener('click', hojaMande);
     $('#hojaCerrar').addEventListener('click', cerrarHoja);
     $('#visorCerrar').addEventListener('click', function(){ $('#visor').hidden = true; $('#visorImg').src = ''; });
@@ -1263,8 +1520,11 @@
     });
 
     document.addEventListener('click', function(ev){
-      var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu],[data-foto-tomar],[data-foto-galeria],[data-foto-quitar]') : null;
+      var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu],[data-foto-tomar],[data-foto-galeria],[data-foto-quitar],[data-prest],[data-saldar],[data-borrar-prest]') : null;
       if (!t) return;
+      if (t.dataset.saldar){ saldarPrestamo(t.dataset.saldar); return; }
+      if (t.dataset.borrarPrest){ borrarPrestamo(t.dataset.borrarPrest); return; }
+      if (t.dataset.prest){ hojaPrestamo(t.dataset.prest); return; }
       if (t.dataset.fotoTomar){ pedirFoto(true); return; }
       if (t.dataset.fotoGaleria){ pedirFoto(false); return; }
       if (t.dataset.fotoQuitar){ var i = $('#fFoto'); if (i) i.value = ''; pintarFoto(); return; }
