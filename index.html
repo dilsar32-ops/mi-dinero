@@ -37,6 +37,8 @@
   }
   .barra h1{font-size:17px; margin:0; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .env{padding:16px; max-width:640px; margin:0 auto}
+  .correazo{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:17px;
+            font-weight:700; word-break:break-all; margin-top:6px; line-height:1.3}
   .fotoreal{position:absolute; width:1px; height:1px; opacity:0; pointer-events:none}
   .fotoprev{display:flex; align-items:center; gap:12px; margin-top:10px;
             background:var(--tarjeta2); border:1px solid var(--linea);
@@ -139,7 +141,16 @@
   <div class="barra" style="margin:-16px -16px 16px"><h1>Empezar el fondo</h1></div>
   <div class="tarjeta">
     <div id="armarAviso"></div>
-    <p class="sub" style="margin-top:0">Un fondo es una bolsa de dinero que dos personas ven igual. Usted manda, ella anota lo que llega y en qué lo gasta.</p>
+    <div class="aviso ojo" style="margin-top:0">
+      <b>Nadie ha invitado a este correo:</b>
+      <div id="armarCorreo" class="correazo"></div>
+      <div style="margin-top:8px">Si alguien lo invitó, el correo <b>no es el mismo</b>.
+      Revíselo letra por letra: una letra de más y usted queda en un fondo aparte,
+      sin ver el dinero de ellos.</div>
+      <div style="margin-top:8px">Si usted es el primero y nadie lo invitó, está bien: siga.</div>
+      <button class="btn claro" id="armarSalir" style="margin-top:12px">Ese no es mi correo · salir</button>
+    </div>
+    <p class="sub">Un fondo es una bolsa de dinero que dos personas ven igual. Usted manda, ella anota lo que llega y en qué lo gasta.</p>
     <label for="aNombre">¿Cómo le llamamos?</label>
     <input id="aNombre" type="text" value="Casa de Guatemala">
     <label for="aMoneda">¿En qué moneda gasta ella?</label>
@@ -260,7 +271,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-26-O';
+  var APP_BUILD = '2026-09-26-P';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -1449,6 +1460,7 @@
       if (!casa){
         $('#aYo').value = S.nombreNuevo || (S.correo || '').split('@')[0];
         $('#esperaCorreo').textContent = 'Su correo: ' + (S.correo || '');
+        $('#armarCorreo').textContent = S.correo || '';
         ver('armar');
         return;
       }
@@ -1465,6 +1477,17 @@
   }
 
   function crearFondo(){
+    // Aqui se llega SOLO cuando no habia invitacion para este correo.
+    // A Nancy le paso: se registro con una letra de mas, el app le armo
+    // un fondo aparte sin decirle nada, anoto Q61.12 ahi, y el no vio
+    // nada. Ahora hay que decir que si a proposito.
+    if (!confirm('Va a crear un fondo NUEVO, aparte.\n\n' +
+                 'Si alguien lo invitó, esto NO lo mete al fondo de ellos: el correo ' +
+                 (S.correo || '') + ' no coincide con ninguna invitación.\n\n' +
+                 '¿Seguro que nadie lo invitó?')) return;
+    crearFondoDeVeras();
+  }
+  function crearFondoDeVeras(){
     var nombre = val('aNombre'), yo = val('aYo'), mon = val('aMoneda').split('|');
     if (!nombre){ aviso('#armarAviso', 'Póngale un nombre al fondo.'); return; }
     if (!yo){ aviso('#armarAviso', 'Ponga su nombre.'); return; }
@@ -1495,6 +1518,7 @@
     });
     $('#aCrear').addEventListener('click', crearFondo);
     $('#esperaSalir').addEventListener('click', salir);
+    $('#armarSalir').addEventListener('click', salir);
     $('#btnRefrescar').addEventListener('click', function(){
       aviso('#appAviso', '');
       colaVaciar().then(function(){ return cargar(); }).then(pintar)
