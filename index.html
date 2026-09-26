@@ -37,6 +37,12 @@
   }
   .barra h1{font-size:17px; margin:0; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .env{padding:16px; max-width:640px; margin:0 auto}
+  .fotoreal{position:absolute; width:1px; height:1px; opacity:0; pointer-events:none}
+  .fotoprev{display:flex; align-items:center; gap:12px; margin-top:10px;
+            background:var(--tarjeta2); border:1px solid var(--linea);
+            border-radius:var(--r); padding:10px}
+  .fotoprev img{width:56px; height:56px; object-fit:cover; border-radius:10px; flex:0 0 auto}
+  .fotoprev .t{flex:1; min-width:0; font-size:14px; color:var(--suave)}
   #puerta, #armar, #espera{padding-top:calc(env(safe-area-inset-top) + 16px)}
   .tarjeta{background:var(--tarjeta); border:1px solid var(--linea); border-radius:var(--r); padding:16px; margin-bottom:14px}
 
@@ -248,7 +254,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-26-K';
+  var APP_BUILD = '2026-09-26-L';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -845,6 +851,44 @@
              .concat([S.miNombre]);
   }
 
+  // El control de archivo que trae iOS dice "Choose File / no file
+  // selected" y no le dice nada a nadie. Se esconde y se manejan dos
+  // botones claros. El input sigue siendo UNO SOLO: lo unico que cambia
+  // es si lleva "capture", que es lo que manda a la camara directo.
+  function campoFoto(){
+    return '<label>Foto del recibo</label>' +
+      '<input id="fFoto" class="fotoreal" type="file" accept="image/*" capture="environment">' +
+      '<button type="button" class="btn verde" data-foto-tomar="1">📷 Tomar foto del recibo</button>' +
+      '<button type="button" class="btn claro" data-foto-galeria="1" style="margin-top:8px">' +
+        'O escoger una que ya tengo</button>' +
+      '<div id="fFotoPrev" class="fotoprev" hidden>' +
+        '<img id="fFotoImg" alt="">' +
+        '<div class="t" id="fFotoTxt"></div>' +
+        '<button type="button" class="btn chico claro" data-foto-quitar="1">Quitar</button>' +
+      '</div>';
+  }
+
+  var fotoURL = null;
+  function pintarFoto(){
+    var i = $('#fFoto'), caja = $('#fFotoPrev');
+    if (!i || !caja) return;
+    var f = (i.files || [])[0];
+    if (fotoURL){ URL.revokeObjectURL(fotoURL); fotoURL = null; }
+    if (!f){ caja.hidden = true; $('#fFotoImg').src = ''; return; }
+    fotoURL = URL.createObjectURL(f);
+    $('#fFotoImg').src = fotoURL;
+    var kb = Math.round(f.size / 1024);
+    $('#fFotoTxt').textContent = 'Foto lista' + (kb ? ' · ' + (kb > 999 ? (kb/1024).toFixed(1) + ' MB' : kb + ' KB') : '');
+    caja.hidden = false;
+  }
+  function pedirFoto(conCamara){
+    var i = $('#fFoto');
+    if (!i) return;
+    if (conCamara) i.setAttribute('capture', 'environment');
+    else i.removeAttribute('capture');
+    i.click();
+  }
+
   function campoCategoria(){
     var o = '<option value="">— escoja —</option>';
     S.cats.forEach(function(c){ o += '<option value="' + esc(c.nombre) + '">' + esc(c.nombre) + '</option>'; });
@@ -861,8 +905,7 @@
       '<label for="fNota">¿Qué fue? (opcional)</label>' +
       '<input id="fNota" type="text" placeholder="20 sacos de cemento">' +
       campoFecha('fFecha', '¿Qué día?') +
-      '<label for="fFoto">Foto del recibo</label>' +
-      '<input id="fFoto" type="file" accept="image/*" capture="environment">',
+      campoFoto(),
       guardarGasto);
   }
 
@@ -1213,9 +1256,18 @@
     });
 
     // un solo oyente para todo lo que se pinta
+    // El input se crea de nuevo cada vez que se abre la hoja, asi que
+    // el aviso se escucha desde el documento.
+    document.addEventListener('change', function(ev){
+      if (ev.target && ev.target.id === 'fFoto') pintarFoto();
+    });
+
     document.addEventListener('click', function(ev){
-      var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu]') : null;
+      var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu],[data-foto-tomar],[data-foto-galeria],[data-foto-quitar]') : null;
       if (!t) return;
+      if (t.dataset.fotoTomar){ pedirFoto(true); return; }
+      if (t.dataset.fotoGaleria){ pedirFoto(false); return; }
+      if (t.dataset.fotoQuitar){ var i = $('#fFoto'); if (i) i.value = ''; pintarFoto(); return; }
       if (t.dataset.llego){ hojaLlego(t.dataset.llego); return; }
       if (t.dataset.foto){ abrirFoto(t.dataset.foto); return; }
       if (t.dataset.quitarEnvio){ borrarEnvio(t.dataset.quitarEnvio); return; }
