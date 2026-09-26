@@ -206,6 +206,11 @@
       <div id="listaOrigen"></div>
     </div>
 
+    <div class="tarjeta" id="cajaReceptor" hidden>
+      <h2>Quién ha recibido el dinero</h2>
+      <div id="listaReceptor"></div>
+    </div>
+
     <div class="tarjeta" id="cajaDestino" hidden>
       <h2>A quién se le ha pagado</h2>
       <div id="listaDestino"></div>
@@ -243,7 +248,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-26-I';
+  var APP_BUILD = '2026-09-26-J';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -325,6 +330,18 @@
     (envios || []).forEach(function(e){
       if (!llego(e)) return;                  // lo que va en camino todavia no entro
       var k = (e.de_quien || '').trim() || 'Sin anotar';
+      m[k] = (m[k] || 0) + cent(e.gtq);
+    });
+    return Object.keys(m).map(function(k){ return { nombre: k, cent: m[k] }; })
+            .sort(function(a, b){ return b.cent - a.cent; });
+  }
+
+  // Quien recibio el dinero que entro (ella, su mama, un vecino).
+  function porReceptor(envios){
+    var m = {};
+    (envios || []).forEach(function(e){
+      if (!llego(e)) return;
+      var k = (e.recibio || '').trim() || 'Sin anotar';
       m[k] = (m[k] || 0) + cent(e.gtq);
     });
     return Object.keys(m).map(function(k){ return { nombre: k, cent: m[k] }; })
@@ -506,6 +523,7 @@
     pintarDueno();
     pintarCats();
     pintarOrigen();
+    pintarReceptor();
     pintarDestino();
     pintarMovimientos();
 
@@ -614,6 +632,14 @@
     $('#cajaDestino').hidden = !hay;
   }
 
+  function pintarReceptor(){
+    var f = porReceptor(S.envios);
+    var distintos = f.filter(function(x){ return x.nombre !== 'Sin anotar'; }).length;
+    var util = distintos > 1;            // con un solo nombre no aporta nada
+    var hay = util && pintarBarras('#listaReceptor', f, recibidoCent(S.envios));
+    $('#cajaReceptor').hidden = !hay;
+  }
+
   function pintarCats(){
     var cats = porCategoria(S.gastos);
     if (!cats.length){ $('#listaCats').innerHTML = ''; return; }
@@ -639,7 +665,8 @@
             (e.como ? ' · ' + e.como : ''),
         nota:(S.soyDueno ? ((e.usd ? 'Salieron ' + usd(cent(e.usd)) : 'Sin registrar cuánto salió') +
                (e.nota ? ' · ' : '')) : '') + (e.nota || ''),
-        cent:cent(e.gtq), quien:e.confirmo || e.anoto });
+        cent:cent(e.gtq),
+        quien:(e.recibio ? 'lo recibió ' + e.recibio : (e.confirmo || e.anoto)) });
     });
     S.gastos.forEach(function(g){
       items.push({ f:g.gastado_el, tipo:'sale', id:g.id,
@@ -791,6 +818,10 @@
   }
   function nombresDeOrigen(){ return (S.envios || []).map(function(e){ return e.de_quien; }); }
   function nombresDeDestino(){ return (S.gastos || []).map(function(g){ return g.a_quien; }); }
+  function nombresDeReceptor(){
+    return (S.envios || []).map(function(e){ return e.recibio; })
+             .concat([S.miNombre]);
+  }
 
   function campoCategoria(){
     var o = '<option value="">— escoja —</option>';
@@ -873,6 +904,8 @@
       campoFecha('fFecha', '¿Qué día llegó?') +
       campoPersona('fDeQuien', '¿De quién vino?',
                    'Su nombre, un pariente, una venta…', nombresDeOrigen()) +
+      campoPersona('fRecibio', '¿Quién lo recibió?',
+                   'Quién fue a traerlo', nombresDeReceptor()) +
       '<label for="fComo">¿Por dónde llegó? (opcional)</label>' +
       '<input id="fComo" type="text" placeholder="Western Union">' +
       '<label for="fNota">Nota (opcional)</label>' +
@@ -883,7 +916,7 @@
         if (!f){ aviso('#hojaAviso', 'Ponga el día.'); return Promise.resolve(false); }
         return pedir('/rest/v1/casa_envios', { metodo:'POST', cuerpo:{
           casa_id:S.casa.id, mandado_el:f, llego_el:f, gtq:monto,
-          de_quien:val('fDeQuien') || null,
+          de_quien:val('fDeQuien') || null, recibio:val('fRecibio') || null,
           como:val('fComo') || null, nota:val('fNota') || null,
           anoto:S.miNombre, confirmo:S.miNombre, confirmado:new Date().toISOString()
         }}).then(function(r){
@@ -928,6 +961,8 @@
       '<label for="fMonto">¿Cuántos ' + simbolo() + ' le llegaron a la mano?</label>' +
       '<input id="fMonto" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00">' +
       campoFecha('fFecha', '¿Qué día llegó?') +
+      campoPersona('fRecibio', '¿Quién lo recibió?',
+                   'Quién fue a traerlo', nombresDeReceptor()) +
       '<div class="sub" style="margin-top:14px">Ponga lo que de verdad recibió, ya sin lo que cobró el ' +
         'servicio. Ese es el número que cuenta.</div>',
       function(){
@@ -935,7 +970,8 @@
         if (!monto){ aviso('#hojaAviso', 'Escriba cuánto le llegó.'); return Promise.resolve(false); }
         if (!f){ aviso('#hojaAviso', 'Ponga el día.'); return Promise.resolve(false); }
         return pedir('/rest/v1/casa_envios?id=eq.' + id, { metodo:'PATCH', cuerpo:{
-          gtq:monto, llego_el:f, confirmo:S.miNombre, confirmado:new Date().toISOString()
+          gtq:monto, llego_el:f, recibio:val('fRecibio') || null,
+          confirmo:S.miNombre, confirmado:new Date().toISOString()
         }}).then(function(r){
           if (!r.ok) return leerError(r).then(function(m){ throw new Error(m); });
           return true;
