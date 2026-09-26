@@ -260,7 +260,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-26-M';
+  var APP_BUILD = '2026-09-26-O';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -652,13 +652,20 @@
   function pintar(){
     var sc = saldoCent(S.envios, S.gastos, S.prestamos, S.abonos);
     $('#tituloFondo').textContent = S.casa.nombre;
-    $('#granLbl').textContent = S.soyDueno ? 'Le queda a ' + primerNombre() : 'Le queda';
+    // A el le interesa DE QUIEN es el saldo; a ella le interesa que es
+    // su pantalla. Decision suya: "deberia decir bienvenida Nancy".
+    $('#granLbl').textContent = S.soyDueno
+      ? 'Le queda a ' + primerNombre()
+      : 'Bienvenida, ' + (S.miNombre || '');
     var num = $('#granNum');
     num.textContent = plata(sc);
     num.className = 'gran' + (sc < 0 ? ' rojo' : '');
 
     var rec = recibidoCent(S.envios), gas = gastadoCent(S.gastos);
-    $('#granSub').textContent = 'Han llegado ' + plata(rec) + ' · se han gastado ' + plata(gas) +
+    // Si el rotulo de arriba es un saludo, el numero grande se queda sin
+    // explicacion: se le pone aqui.
+    $('#granSub').textContent = (S.soyDueno ? '' : 'Esto es lo que le queda. ') +
+      'Han llegado ' + plata(rec) + ' · se han gastado ' + plata(gas) +
       (sc < 0 ? ' · hay más gastado que recibido, algo falta de anotar' : '');
 
     pintarCamino();
@@ -675,6 +682,15 @@
     $('#cajaCats').hidden = !S.gastos.length;
     $('#movTitulo').textContent = 'Todo lo que ha pasado';
     $('#verTag').textContent = APP_BUILD;
+  }
+
+  // ¿Este dinero salio de SU cuenta? Solo entonces tiene sentido
+  // hablar de dolares. Lo que mando un pariente o dejo una venta nunca
+  // salio de su bolsa, y pedirle que le ponga dolares le inflaria el
+  // "ha mandado en total" con plata ajena.
+  function esMio(e){
+    var yo = (S.miNombre || '').trim().toLowerCase();
+    return ((e && e.de_quien) || '').trim().toLowerCase() === yo;
   }
 
   function primerNombre(){
@@ -720,9 +736,8 @@
     // Solo se avisa de las llegadas que son DE EL. El dinero que vino de
     // otro lado (un pariente, una venta) nunca salio de su cuenta, y
     // ponerle dolares inflaria su "ha mandado en total" con plata ajena.
-    var yo = (S.miNombre || '').trim().toLowerCase();
     var sinSalida = S.envios.filter(function(e){
-      return llego(e) && !e.usd && (e.de_quien || '').trim().toLowerCase() === yo;
+      return llego(e) && !e.usd && esMio(e);
     });
     if (sinSalida.length){
       h += '<div class="aviso ojo" style="margin:12px 0 0">' + sinSalida.length +
@@ -800,8 +815,13 @@
       items.push({ f:e.llego_el, tipo:'entra', id:e.id,
         qué:'Entró dinero' + (e.de_quien ? ' · de ' + e.de_quien : '') +
             (e.como ? ' · ' + e.como : ''),
-        nota:(S.soyDueno ? ((e.usd ? 'Salieron ' + usd(cent(e.usd)) : 'Sin registrar cuánto salió') +
-               (e.nota ? ' · ' : '')) : '') + (e.nota || ''),
+        nota:(function(){
+          var partes = [];
+          if (S.soyDueno && e.usd) partes.push('Salieron ' + usd(cent(e.usd)));
+          else if (S.soyDueno && esMio(e)) partes.push('Sin registrar cuánto salió');
+          if (e.nota) partes.push(e.nota);
+          return partes.join(' · ');
+        })(),
         cent:cent(e.gtq),
         quien:(e.recibio ? 'lo recibió ' + e.recibio : (e.confirmo || e.anoto)) });
     });
