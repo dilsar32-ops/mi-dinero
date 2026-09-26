@@ -248,7 +248,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-26-J';
+  var APP_BUILD = '2026-09-26-K';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -323,6 +323,27 @@
     return Object.keys(m).map(function(k){ return { nombre: k, cent: m[k] }; })
             .sort(function(a, b){ return b.cent - a.cent; });
   }
+  // Como se llama la otra persona del fondo. Por orden de que tan
+  // seguro es el dato: el que ella misma escribio al entrar, luego el
+  // nombre con que se le invito, y de ultimo el que aparezca firmando
+  // algun apunte. Si no hay ninguno, "ella" -- nunca un nombre inventado.
+  function nombreDelOtro(miembros, invitados, gastos, envios, miUid, miNombre){
+    var m = (miembros || []).filter(function(x){
+      return x && x.user_id !== miUid && (x.nombre || '').trim();
+    })[0];
+    if (m) return m.nombre.trim();
+
+    var i = (invitados || []).filter(function(x){ return x && (x.nombre || '').trim(); })[0];
+    if (i) return i.nombre.trim();
+
+    var otro = null;
+    (gastos || []).concat(envios || []).forEach(function(x){
+      var v = ((x && (x.anoto || x.confirmo)) || '').trim();
+      if (v && v !== (miNombre || '').trim() && !otro) otro = v;
+    });
+    return otro || 'ella';
+  }
+
   // De donde vino el dinero que YA LLEGO. Mismo molde que porCategoria:
   // lo que no trae nombre no se adivina, se llama "Sin anotar".
   function porOrigen(envios){
@@ -362,7 +383,8 @@
   // ====== FIN DE LAS CUENTAS ==================================
 
   var S = { tok:null, ref:null, correo:null, uid:null, vence:0,
-            casa:null, soyDueno:false, miNombre:'', envios:[], gastos:[], cats:[] };
+            casa:null, soyDueno:false, miNombre:'', envios:[], gastos:[], cats:[],
+            miembros:[], invitados:[] };
 
   function $(s){ return document.querySelector(s); }
   function esc(t){
@@ -491,16 +513,22 @@
         }
         S.casa = filas[0];
         return Promise.all([
-          pedir('/rest/v1/casa_miembros?select=nombre,dueno&casa_id=eq.' + S.casa.id + '&user_id=eq.' + S.uid),
+          pedir('/rest/v1/casa_miembros?select=user_id,nombre,dueno&casa_id=eq.' + S.casa.id),
           pedir('/rest/v1/casa_envios?select=*&casa_id=eq.' + S.casa.id + '&order=mandado_el.desc,creado.desc'),
           pedir('/rest/v1/casa_gastos?select=*&casa_id=eq.' + S.casa.id + '&order=gastado_el.desc,creado.desc'),
-          pedir('/rest/v1/casa_categorias?select=nombre,orden,activa&casa_id=eq.' + S.casa.id + '&activa=eq.true&order=orden')
+          pedir('/rest/v1/casa_categorias?select=nombre,orden,activa&casa_id=eq.' + S.casa.id + '&activa=eq.true&order=orden'),
+          // Solo el dueno ve esto; a ella la base le devuelve una lista
+          // vacia y no pasa nada.
+          pedir('/rest/v1/casa_invitaciones?select=nombre&casa_id=eq.' + S.casa.id)
         ]).then(function(rs){
           return Promise.all(rs.map(function(r){ return r.ok ? r.json() : []; }));
         }).then(function(d){
-          var yo = d[0][0] || { nombre:(S.correo || '').split('@')[0], dueno:false };
+          S.miembros = d[0] || [];
+          var yo = S.miembros.filter(function(m){ return m.user_id === S.uid; })[0]
+                   || { nombre:(S.correo || '').split('@')[0], dueno:false };
           S.miNombre = yo.nombre; S.soyDueno = !!yo.dueno;
           S.envios = d[1]; S.gastos = d[2]; S.cats = d[3];
+          S.invitados = d[4] || [];
           return S.casa;
         });
       });
@@ -535,13 +563,7 @@
   }
 
   function primerNombre(){
-    var otro = null;
-    // el nombre de ella sale de los apuntes que ella ha hecho
-    S.gastos.concat(S.envios).forEach(function(x){
-      var n = x.anoto || x.confirmo;
-      if (n && n !== S.miNombre && !otro) otro = n;
-    });
-    return otro || 'ella';
+    return nombreDelOtro(S.miembros, S.invitados, S.gastos, S.envios, S.uid, S.miNombre);
   }
 
   // El dinero que salio y nadie ha confirmado que llego. Esto no se
