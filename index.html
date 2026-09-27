@@ -340,7 +340,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-27-W';
+  var APP_BUILD = '2026-09-27-X';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -1401,9 +1401,14 @@
     var x = Number(t);
     return (t && isFinite(x) && x > 0) ? x : null;
   }
-  function campoFecha(id, etiqueta){
+  // Con valor '' la casilla arranca VACIA. Para ponerse al dia con pagos
+  // viejos eso es lo correcto: si viniera con la de hoy, ella anota ocho
+  // pagos de meses distintos y los ocho quedan con la fecha de hoy sin que
+  // nadie se de cuenta. Misma regla que el select que arranca vacio.
+  function campoFecha(id, etiqueta, valor){
+    var v = (valor === undefined) ? hoy() : valor;
     return '<label for="' + id + '">' + etiqueta + '</label>' +
-           '<input id="' + id + '" type="date" value="' + hoy() + '">';
+           '<input id="' + id + '" type="date" value="' + v + '">';
   }
   // El <select> SIEMPRE arranca vacio. Un select que llega con la
   // primera opcion ya escogida es como se manda un dato que nadie puso.
@@ -1637,26 +1642,48 @@
     return '<label for="fProy">¿De qué proyecto es?</label><select id="fProy">' + o + '</select>';
   }
 
+  // DOS COSAS DISTINTAS CON EL MISMO FORMULARIO:
+  //   - "Gaste": algo que acaba de pasar hoy.
+  //   - "Anotar lo que ya se le dio": ponerse al dia con pagos viejos, que es
+  //     lo que ella va a hacer. Ahi la fecha NO puede venir con la de hoy.
+  // Aviso de el: "Nancy va a anotar lo que ya se ha dado, no como nuevo
+  // gasto; ella agregara solo lo que ya les hemos dado".
   function hojaGaste(proyId){
-    abrirHoja('Gasté', 
-      '<label for="fMonto">¿Cuánto gastó? (' + simbolo() + ')</label>' +
+    var alDia = !!proyId && proyId !== 'nada';
+    abrirHoja(alDia ? 'Anotar lo que ya se le dio' : 'Gasté',
+      (alDia ? '<p class="sub">Esto es para apuntar dinero que <b>ya se entregó</b>. ' +
+               'No es un gasto de hoy: póngale el día en que de verdad se le dio.</p>' : '') +
+      '<label for="fMonto">' + (alDia ? '¿Cuánto se le dio?' : '¿Cuánto gastó?') +
+        ' (' + simbolo() + ')</label>' +
       '<input id="fMonto" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00">' +
       campoProyecto(proyId) +
       campoCategoria() +
-      campoPersona('fAQuien', '¿A quién le pagó? (opcional)',
-                   'Ferretería, el albañil, …', nombresDeDestino()) +
+      campoPersona('fAQuien', (alDia ? '¿A quién se le dio?' : '¿A quién le pagó? (opcional)'),
+                   'El contratista, la ferretería, …', nombresDeDestino()) +
       '<label for="fNota">¿Qué fue? (opcional)</label>' +
-      '<input id="fNota" type="text" placeholder="20 sacos de cemento">' +
-      campoFecha('fFecha', '¿Qué día?') +
+      '<input id="fNota" type="text" placeholder="' +
+        (alDia ? 'Primer pago, 20 sacos de cemento…' : '20 sacos de cemento') + '">' +
+      campoFecha('fFecha', alDia ? '¿Qué día se le dio?' : '¿Qué día?',
+                 alDia ? '' : undefined) +
       campoFoto(),
-      guardarGasto);
+      guardarGasto,
+      alDia ? { boton:'Anotar' } : undefined);
   }
 
   function guardarGasto(){
     var monto = numero('fMonto'), cat = val('fCat'), f = val('fFecha');
     if (!monto){ aviso('#hojaAviso', 'Escriba cuánto gastó.'); return Promise.resolve(false); }
     if (!cat){ aviso('#hojaAviso', 'Escoja en qué lo gastó.'); return Promise.resolve(false); }
-    if (!f){ aviso('#hojaAviso', 'Ponga el día.'); return Promise.resolve(false); }
+    if (!f){
+      aviso('#hojaAviso', 'Ponga el día — el día en que de verdad se dio el dinero.');
+      return Promise.resolve(false);
+    }
+    // Un pago con fecha de manana no existe. Al estar poniendo fechas viejas
+    // a mano, un dedazo en el ano es lo mas facil del mundo.
+    if (f > hoy()){
+      aviso('#hojaAviso', 'Esa fecha todavía no llega. Revise el día.');
+      return Promise.resolve(false);
+    }
     // Si hay carpetas, tiene que decir cual, aunque sea "Sin carpeta". Un
     // gasto que cae en la carpeta equivocada mueve el "falta" de una obra.
     var pid = $('#fProy') ? val('fProy') : 'nada';
