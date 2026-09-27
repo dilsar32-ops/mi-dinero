@@ -287,7 +287,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-27-U';
+  var APP_BUILD = '2026-09-27-V';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -825,9 +825,16 @@
     var i = String(ref || '').indexOf(':');
     return { tabla: ref.slice(0, i), id: ref.slice(i + 1) };
   }
-  function hojaRevisar(ref){
+  // LA HOJA TIENE QUE DECIR CUAL ES. El 27 de septiembre mando la pregunta
+  // en la fila equivocada (Q61.12 en vez de Q117,500): los botones "Corregir"
+  // se ven identicos uno debajo del otro y la hoja no nombraba ninguno. Una
+  // pantalla que va a avisarle a otra persona tiene que ensenar primero de que
+  // esta hablando.
+  function hojaRevisar(ref, que, centAhora){
     var r = partirRef(ref);
     abrirHoja('Corregir este monto',
+      '<div class="revisa"><b>Va a marcar esta anotación:</b><br>' +
+      esc(que || '') + '<br><b>' + plata(Number(centAhora) || 0) + '</b></div>' +
       '<p class="sub">Esto se le manda a Nancy para que ella lo corrija y lo guarde. ' +
       'Escríbale qué está mal: le va a salir junto al monto, con el botón para corregirlo. ' +
       'Hasta que usted se lo mande, ella no puede cambiarlo.</p>' +
@@ -1011,7 +1018,8 @@
       var yo = String(S.miNombre || '').trim().toLowerCase();
       var loAnotoElla = String(x.anoto || '').trim().toLowerCase() !== yo;
       var preguntar = (S.soyDueno && !x.revisar && loAnotoElla)
-        ? '<button type="button" class="chico revisar-btn" data-revisar="' + x.tipo2 + ':' + esc(x.id) + '">Corregir</button>'
+        ? '<button type="button" class="chico revisar-btn" data-revisar="' + x.tipo2 + ':' + esc(x.id) + '"' +
+            ' data-que="' + esc(x.qué) + '" data-monto="' + x.cent + '">Corregir</button>'
         : '';
       h += '<div class="fila' + (x.revisar ? ' enrevision' : '') + '">' +
         (x.foto ? '<img class="miniftgr" data-foto="' + esc(x.foto) + '" alt="Recibo">' : '') +
@@ -1761,7 +1769,7 @@
     document.addEventListener('click', function(ev){
       var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu],[data-foto-tomar],[data-foto-galeria],[data-foto-quitar],[data-prest],[data-saldar],[data-borrar-prest],[data-grupo],[data-revisar],[data-corregir],[data-quitarev]') : null;
       if (!t) return;
-      if (t.dataset.revisar){ hojaRevisar(t.dataset.revisar); return; }
+      if (t.dataset.revisar){ hojaRevisar(t.dataset.revisar, t.dataset.que, t.dataset.monto); return; }
       if (t.dataset.corregir){ hojaCorregir(t.dataset.corregir, t.dataset.monto); return; }
       if (t.dataset.quitarev){ quitarRevision(t.dataset.quitarev); return; }
       if (t.dataset.grupo){ hojaGrupo(t.dataset.grupo, t.dataset.quien); return; }
