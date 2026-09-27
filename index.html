@@ -73,6 +73,8 @@
   .btn:active{transform:scale(.99); filter:brightness(1.15)}
   .btn:disabled{opacity:.5}
   .btn.verde{background:var(--verde); border-color:var(--verde); color:#07221a}
+  /* Enviar NO es guardar: el que pide una correccion va en rojo (27 sep 2026) */
+  .btn.rojo{background:#e5484d; border-color:#e5484d; color:#fff}
   .btn.claro{background:transparent}
   .btn.chico{min-height:38px; font-size:14px; font-weight:500; width:auto; padding:8px 14px}
   .dos{display:grid; grid-template-columns:1fr 1fr; gap:10px}
@@ -105,11 +107,11 @@
   .catfila .b{grid-column:1 / -1}
 
   /* ¿Está bien este monto? (27 sep 2026) */
-  .fila.enrevision{background:rgba(255,159,10,.08); border-radius:10px; padding-left:8px; padding-right:8px}
-  .revisa{margin-top:6px; font-size:13px; line-height:1.45; color:#ffb340;
-    background:rgba(255,159,10,.12); border:1px solid rgba(255,159,10,.45);
+  .fila.enrevision{background:rgba(229,72,77,.10); border-radius:10px; padding-left:8px; padding-right:8px}
+  .revisa{margin-top:6px; font-size:13px; line-height:1.45; color:#ff8a8d;
+    background:rgba(229,72,77,.14); border:1px solid rgba(229,72,77,.55);
     border-radius:10px; padding:8px 10px}
-  .revisa b{color:#ffcd7a}
+  .revisa b{color:#ffb3b5}
   .cuando.corregido{color:#3ddc84}
   .chico{display:block; margin-top:6px; font-size:12px; font-weight:700; padding:7px 10px;
     border-radius:8px; border:1px solid var(--linea); background:var(--tarjeta2);
@@ -285,7 +287,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-27-S';
+  var APP_BUILD = '2026-09-27-T';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -821,11 +823,12 @@
       '<textarea id="fRevisar" rows="3" placeholder="Ej. ¿No serían Q11,750 en vez de Q117,500?"></textarea>',
       function(){
         var nota = ($('#fRevisar').value || '').trim();
-        if (nota.length < 2){ aviso('#hojaAviso', 'Escriba qué le parece mal.', 'malo'); return false; }
+        if (nota.length < 2){ aviso('#hojaAviso', 'Escriba qué hay que corregir.', 'malo'); return false; }
         return pedir('/rest/v1/rpc/casa_pedir_revision', { method:'POST',
           body: JSON.stringify({ p_tabla: r.tabla, p_id: r.id, p_nota: nota }) })
           .then(function(){ return true; });
-      });
+      },
+      { boton: 'Enviar a Nancy', rojo: true });
   }
   function hojaCorregir(ref, centAhora){
     var r = partirRef(ref);
@@ -1083,13 +1086,25 @@
 
   // ====== FORMULARIOS =========================================
   var hojaAccion = null;
-  function abrirHoja(titulo, cuerpo, accion){
+  // El boton de abajo NO siempre guarda. Su correccion del 27 de septiembre,
+  // viendo la pantalla de pedir una correccion: "en vez de decir guardar debe
+  // ser enviar, y debe salir en rojo... ¿por que sale guardar?". Tenia razon:
+  // ahi el no guarda nada, le MANDA a Nancy que lo corrija. El rotulo y el
+  // color del boton son parte de lo que la pantalla dice.
+  var hojaBoton = 'Guardar';
+  function abrirHoja(titulo, cuerpo, accion, opciones){
+    var o = opciones || {};
     $('#hojaTitulo').textContent = titulo;
     $('#hojaCuerpo').innerHTML = cuerpo;
     aviso('#hojaAviso', '');
     hojaAccion = accion;
-    $('#hojaGuardar').hidden = !accion;          // hoja de solo leer
-    $('#hojaAtras').textContent = accion ? '← Regresar' : '← Regresar';
+    hojaBoton = o.boton || 'Guardar';
+    var b = $('#hojaGuardar');
+    b.hidden = !accion;                          // hoja de solo leer
+    b.textContent = hojaBoton;
+    b.classList.toggle('rojo', !!o.rojo);
+    b.classList.toggle('verde', !o.rojo);
+    $('#hojaAtras').textContent = '← Regresar';
     ver('hoja');
   }
   function cerrarHoja(){ hojaAccion = null; ver('app'); }
@@ -1688,7 +1703,7 @@
     $('#hojaGuardar').addEventListener('click', function(){
       if (!hojaAccion) return;
       var btn = this;
-      btn.disabled = true; btn.textContent = 'Guardando…';
+      btn.disabled = true; btn.textContent = (hojaBoton === 'Guardar' ? 'Guardando…' : 'Enviando…');
       Promise.resolve(hojaAccion()).then(function(res){
         if (res === true || res === 'cola'){
           var mensajeCola = (res === 'cola');
@@ -1705,7 +1720,7 @@
       }).catch(function(e){
         aviso('#hojaAviso', 'No se pudo guardar: ' + e.message);
       }).then(function(){
-        btn.disabled = false; btn.textContent = 'Guardar';
+        btn.disabled = false; btn.textContent = hojaBoton;
       });
     });
 
