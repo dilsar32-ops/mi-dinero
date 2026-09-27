@@ -117,6 +117,14 @@
     border-radius:8px; border:1px solid var(--linea); background:var(--tarjeta2);
     color:var(--texto); cursor:pointer; min-height:34px}
   .revisar-btn{opacity:.75}
+  .pills{display:flex; gap:8px; margin-bottom:14px}
+  .minibtn{flex:1; background:var(--tarjeta); border:1px solid var(--linea); color:var(--suave);
+    border-radius:999px; padding:10px 8px; font-size:14px; font-weight:700; min-height:44px; cursor:pointer}
+  .minibtn.on{background:var(--tarjeta2); color:var(--texto); border-color:var(--verde)}
+  .proy{cursor:pointer}
+  .barrota{height:10px; border-radius:5px; background:var(--linea); overflow:hidden; margin-top:12px}
+  .barrota > i{display:block; height:100%; background:var(--verde); border-radius:5px}
+  .barrota > i.pasado{background:var(--rojo)}
   .miniftgr{width:46px; height:46px; border-radius:8px; object-fit:cover; border:1px solid var(--linea); background:var(--tarjeta2); cursor:pointer}
   .visor{position:fixed; inset:0; background:#000e; z-index:100; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px; padding:20px}
   .visor img{max-width:100%; max-height:80vh; border-radius:10px}
@@ -204,6 +212,12 @@
   <div class="env">
     <div id="appAviso"></div>
 
+    <!-- el menu: lo que hay | proyectos -->
+    <div class="pills">
+      <button class="minibtn on" id="pillHay">Lo que hay</button>
+      <button class="minibtn" id="pillProy">Proyectos</button>
+    </div>
+
     <!-- lo que hay -->
     <div class="tarjeta">
       <div class="granlbl" id="granLbl">Le queda</div>
@@ -264,6 +278,45 @@
   </div>
 </div>
 
+<!-- ================= PROYECTOS (la lista de carpetas) ================= -->
+<div id="proyectos" hidden>
+  <div class="barra">
+    <h1>Proyectos</h1>
+    <button class="btn chico claro" id="proyRefrescar">Refrescar</button>
+  </div>
+  <div class="env">
+    <div id="proyAviso"></div>
+    <div class="pills">
+      <button class="minibtn" id="pillHay2">Lo que hay</button>
+      <button class="minibtn on">Proyectos</button>
+    </div>
+    <div id="listaProy"></div>
+    <button class="btn" id="btnNuevoProy" hidden>+ Nueva carpeta</button>
+    <button class="btn claro" id="proyVolver" style="margin-top:14px">← Regresar a Lo que hay</button>
+    <div class="pie">Arca · versión <span id="verTag2"></span></div>
+  </div>
+</div>
+
+<!-- ================= UN PROYECTO (adentro de la carpeta) ================= -->
+<div id="proyecto" hidden>
+  <div class="barra">
+    <h1 id="unoTitulo">—</h1>
+    <button class="btn chico claro" id="unoAtras">← Regresar</button>
+  </div>
+  <div class="env">
+    <div id="unoAviso"></div>
+    <div class="tarjeta" id="unoResumen"></div>
+    <button class="btn verde" id="btnGastoProy">+ Anotar lo que se dio</button>
+    <button class="btn claro" id="btnEditarProy" hidden style="margin-top:8px">Cambiar el precio o el contratista</button>
+    <div class="tarjeta" style="margin-top:14px">
+      <h2>Todo lo de esta carpeta</h2>
+      <div id="unoLista"></div>
+    </div>
+    <button class="btn claro" id="unoAtras2">← Regresar a Proyectos</button>
+    <div class="pie">Arca · versión <span id="verTag3"></span></div>
+  </div>
+</div>
+
 <!-- ================= HOJA (formularios) ================= -->
 <div id="hoja" class="env" hidden>
   <div class="barra" style="margin:-16px -16px 16px">
@@ -287,7 +340,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-27-V';
+  var APP_BUILD = '2026-09-27-W';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -518,6 +571,30 @@
     var t = 0; (abonos || []).forEach(function(a){ t += cent(a && a.gtq); }); return t;
   }
 
+  // ---- CARPETAS POR PROYECTO ---------------------------------
+  // Su pedido: "cada carpeta por proyecto de lo que se les va dando".
+  // Una carpeta contesta tres cosas: cuanto se acordo, cuanto se le ha
+  // dado, cuanto falta. El "dado" sale de los gastos que apuntan a ella:
+  // el pago al contratista y el material van juntos, como el lo pidio.
+  function gastosDeProyecto(gastos, proyId){
+    return (gastos || []).filter(function(g){ return g.proyecto_id === proyId; });
+  }
+  function dadoCent(gastos, proyId){
+    return gastosDeProyecto(gastos, proyId).reduce(function(t, g){ return t + cent(g.gtq); }, 0);
+  }
+  // SIN PRECIO ACORDADO NO HAY "FALTA". Devolver 0 seria decir que ya se
+  // pago todo, que es exactamente lo contrario de lo que pasa. null quiere
+  // decir "todavia no hay contra que comparar" y la pantalla lo dice asi.
+  function faltaCent(acordado, dado){
+    var a = cent(acordado);
+    return a > 0 ? a - dado : null;
+  }
+  // Lo que no esta en ninguna carpeta TIENE que poder verse. Un gasto que
+  // no aparece en ningun lado es dinero que se desaparecio de la vista.
+  function sinProyecto(gastos){
+    return (gastos || []).filter(function(g){ return !g.proyecto_id; });
+  }
+
   // ====== FIN DE LAS CUENTAS ==================================
 
   var S = { tok:null, ref:null, correo:null, uid:null, vence:0,
@@ -553,11 +630,15 @@
     if (!e) return;
     e.innerHTML = texto ? '<div class="aviso ' + (clase || 'malo') + '">' + esc(texto) + '</div>' : '';
   }
+  // PANTALLA recuerda en cual estaba, para que al cerrar un formulario
+  // regrese a donde lo abrio y no lo bote al principio.
+  var PANTALLA = 'app';
   function ver(cual){
-    ['puerta','armar','espera','app','hoja'].forEach(function(id){
+    ['puerta','armar','espera','app','proyectos','proyecto','hoja'].forEach(function(id){
       var e = document.getElementById(id);
       if (e) e.hidden = (id !== cual);
     });
+    if (cual !== 'hoja') PANTALLA = cual;
     window.scrollTo(0, 0);
   }
 
@@ -671,7 +752,10 @@
           // vacia y no pasa nada.
           pedir('/rest/v1/casa_invitaciones?select=nombre&casa_id=eq.' + S.casa.id),
           pedir('/rest/v1/casa_prestamos?select=*&casa_id=eq.' + S.casa.id + '&order=prestado_el.desc'),
-          pedir('/rest/v1/casa_abonos?select=*&casa_id=eq.' + S.casa.id + '&order=pagado_el')
+          pedir('/rest/v1/casa_abonos?select=*&casa_id=eq.' + S.casa.id + '&order=pagado_el'),
+          // Va al FINAL a proposito: agregarlo en medio le correria el
+          // indice a todo lo de abajo.
+          pedir('/rest/v1/casa_proyectos?select=*&casa_id=eq.' + S.casa.id + '&order=orden,creado')
         ]).then(function(rs){
           return Promise.all(rs.map(function(r){ return r.ok ? r.json() : []; }));
         }).then(function(d){
@@ -682,6 +766,7 @@
           S.envios = d[1]; S.gastos = d[2]; S.cats = d[3];
           S.invitados = d[4] || [];
           S.prestamos = d[5] || []; S.abonos = d[6] || [];
+          S.proyectos = d[7] || [];
           return S.casa;
         });
       });
@@ -689,6 +774,8 @@
 
   // ====== PINTAR ==============================================
   function pintar(){
+    pintarProyectos();
+    if (proyAbierto) pintarProyecto();
     var sc = saldoCent(S.envios, S.gastos, S.prestamos, S.abonos);
     $('#tituloFondo').textContent = S.casa.nombre;
     // A el le interesa DE QUIEN es el saldo; a ella le interesa que es
@@ -722,6 +809,7 @@
     $('#cajaCats').hidden = !S.gastos.length;
     $('#movTitulo').textContent = 'Todo lo que ha pasado';
     $('#verTag').textContent = APP_BUILD;
+    ['#verTag2', '#verTag3'].forEach(function(id){ var e = $(id); if (e) e.textContent = APP_BUILD; });
   }
 
   // ¿Este dinero salio de SU cuenta? Solo entonces tiene sentido
@@ -962,6 +1050,165 @@
     pintarBarras('#listaCats', porCategoria(S.gastos), gastadoCent(S.gastos), 'cat');
   }
 
+  // ---- PANTALLA: LAS CARPETAS --------------------------------
+  var proyAbierto = null;
+
+  function proyPorId(id){
+    return (S.proyectos || []).filter(function(p){ return p.id === id; })[0] || null;
+  }
+  function proyActivos(){
+    return (S.proyectos || []).filter(function(p){ return p.activo !== false; });
+  }
+  function resumenProy(p){
+    var dado = dadoCent(S.gastos, p.id);
+    return { dado:dado, acordado:cent(p.acordado), falta:faltaCent(p.acordado, dado),
+             cuantos:gastosDeProyecto(S.gastos, p.id).length };
+  }
+  function barraProy(dado, acordado){
+    if (!acordado) return '';
+    var pct = Math.round((dado / acordado) * 100);
+    return '<div class="barrota"><i class="' + (pct > 100 ? 'pasado' : '') +
+           '" style="width:' + Math.max(2, Math.min(100, pct)) + '%"></i></div>';
+  }
+  // El numero grande y su rotulo. Se usa igual en la lista y adentro de la
+  // carpeta, para que los dos digan exactamente lo mismo.
+  function cabezaProy(p, r){
+    if (r.falta === null){
+      return '<div class="gran">' + plata(r.dado) + '</div>' +
+             '<div class="sub">ya se ha dado \u00b7 todav\u00eda no tiene precio acordado</div>';
+    }
+    return '<div class="gran' + (r.falta < 0 ? ' rojo' : '') + '">' + plata(Math.abs(r.falta)) + '</div>' +
+           '<div class="sub">' + (r.falta < 0 ? 'SE LE DIO DE M\u00c1S' : 'falta por dar') + '</div>';
+  }
+  function pieProy(p, r){
+    var l = [];
+    if (r.acordado) l.push('Acordado ' + plata(r.acordado));
+    l.push('Ya se le dio ' + plata(r.dado));
+    if (p.contratista) l.push(esc(p.contratista));
+    l.push(r.cuantos + (r.cuantos === 1 ? ' anotaci\u00f3n' : ' anotaciones'));
+    return '<div class="sub">' + l.join(' \u00b7 ') + '</div>';
+  }
+
+  function pintarProyectos(){
+    var lista = $('#listaProy');
+    if (!lista) return;
+    var ps = proyActivos(), h = '';
+    if (!ps.length){
+      h = '<div class="tarjeta"><div class="sub">Todav\u00eda no hay ninguna carpeta.' +
+          (S.soyDueno ? ' Toque \u00ab+ Nueva carpeta\u00bb para abrir la primera.' : '') + '</div></div>';
+    } else {
+      ps.forEach(function(p){
+        var r = resumenProy(p);
+        h += '<div class="tarjeta proy" data-proy="' + esc(p.id) + '">' +
+          '<div class="granlbl">' + esc(p.nombre) + '</div>' +
+          cabezaProy(p, r) + barraProy(r.dado, r.acordado) + pieProy(p, r) +
+          '<div class="sub">Toque para ver todo \u203a</div></div>';
+      });
+    }
+    // LO QUE NO ESTA EN NINGUNA CARPETA tambien se ve. Si no, seria dinero
+    // gastado que no aparece en ninguna pantalla.
+    var sueltos = sinProyecto(S.gastos);
+    if (sueltos.length){
+      var t = sueltos.reduce(function(a, g){ return a + cent(g.gtq); }, 0);
+      h += '<div class="tarjeta proy" data-proy="sueltos">' +
+        '<div class="granlbl">Sin carpeta</div>' +
+        '<div class="gran">' + plata(t) + '</div>' +
+        '<div class="sub">' + sueltos.length +
+        (sueltos.length === 1 ? ' gasto que no est\u00e1' : ' gastos que no est\u00e1n') +
+        ' en ning\u00fan proyecto \u203a</div></div>';
+    }
+    lista.innerHTML = h;
+    var b = $('#btnNuevoProy'); if (b) b.hidden = !S.soyDueno;
+  }
+
+  // ---- PANTALLA: ADENTRO DE UNA CARPETA -----------------------
+  function filaGasto(g){
+    var partes = [fecha(g.gastado_el)];
+    if (g.a_quien) partes.push('a ' + g.a_quien);
+    if (g.nota) partes.push(g.nota);
+    if (g.anoto) partes.push('lo apunt\u00f3 ' + g.anoto);
+    return '<div class="fila">' +
+      (g.foto ? '<img class="miniftgr" data-foto="' + esc(g.foto) + '" alt="Recibo">' : '') +
+      '<div class="izq" style="flex:1">' +
+        '<div class="qu\u00e9">' + esc(g.categoria || 'Gasto') + '</div>' +
+        '<div class="cuando">' + esc(partes.join(' \u00b7 ')) + '</div>' +
+      '</div>' +
+      '<div class="monto sale">\u2212 ' + plata(cent(g.gtq)) + '</div></div>';
+  }
+
+  function pintarProyecto(){
+    if (!$('#unoLista')) return;
+    var sueltos = (proyAbierto === 'sueltos');
+    var p = sueltos ? null : proyPorId(proyAbierto);
+    if (!sueltos && !p){ irProyectos(); return; }
+
+    var gs = sueltos ? sinProyecto(S.gastos) : gastosDeProyecto(S.gastos, p.id);
+    $('#unoTitulo').textContent = sueltos ? 'Sin carpeta' : p.nombre;
+
+    if (sueltos){
+      var t = gs.reduce(function(a, g){ return a + cent(g.gtq); }, 0);
+      $('#unoResumen').innerHTML = '<div class="granlbl">Sin carpeta</div>' +
+        '<div class="gran">' + plata(t) + '</div>' +
+        '<div class="sub">Estos gastos no est\u00e1n en ning\u00fan proyecto. ' +
+        'Se pueden dejar as\u00ed: igual cuentan en el fondo.</div>';
+    } else {
+      var r = resumenProy(p);
+      $('#unoResumen').innerHTML = '<div class="granlbl">' + esc(p.nombre) + '</div>' +
+        cabezaProy(p, r) + barraProy(r.dado, r.acordado) + pieProy(p, r) +
+        (p.nota ? '<div class="sub">' + esc(p.nota) + '</div>' : '');
+    }
+    $('#btnEditarProy').hidden = sueltos || !S.soyDueno;
+    $('#btnGastoProy').hidden = sueltos;
+
+    $('#unoLista').innerHTML = gs.length
+      ? gs.map(filaGasto).join('')
+      : '<div class="sub">Todav\u00eda no se ha anotado nada en esta carpeta.</div>';
+  }
+
+  function irProyectos(){ proyAbierto = null; pintarProyectos(); ver('proyectos'); }
+  function abrirProyecto(id){ proyAbierto = id; pintarProyecto(); ver('proyecto'); }
+
+  // ---- FORMULARIO DE LA CARPETA (solo el dueno) ---------------
+  // El precio acordado es la vara con la que se mide todo lo demas. Si ella
+  // pudiera moverla, el "falta" cambiaria sin que nadie se diera cuenta.
+  // La base tambien lo rechaza, no solo esta pantalla.
+  function hojaProyecto(id){
+    var p = id ? proyPorId(id) : null;
+    abrirHoja(p ? 'Cambiar la carpeta' : 'Nueva carpeta',
+      '<label for="fPNombre">\u00bfC\u00f3mo se llama?</label>' +
+      '<input id="fPNombre" type="text" placeholder="Construcci\u00f3n de la casa" value="' +
+        esc(p ? p.nombre : '') + '">' +
+      '<label for="fPContra">\u00bfA qui\u00e9n se le est\u00e1 pagando? (opcional)</label>' +
+      '<input id="fPContra" type="text" placeholder="El contratista, el alba\u00f1il\u2026" value="' +
+        esc((p && p.contratista) || '') + '">' +
+      '<label for="fPAcordado">Precio acordado (' + simbolo() + ') (opcional)</label>' +
+      '<input id="fPAcordado" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00" value="' +
+        ((p && p.acordado) ? esc(p.acordado) : '') + '">' +
+      '<p class="sub">Con el precio acordado, la carpeta le dice cu\u00e1nto falta por dar. ' +
+      'Si todav\u00eda no hay trato cerrado, d\u00e9jelo vac\u00edo: la carpeta solo va a sumar lo que se ha dado.</p>' +
+      '<label for="fPNota">Nota (opcional)</label>' +
+      '<input id="fPNota" type="text" value="' + esc((p && p.nota) || '') + '">',
+      function(){
+        var nombre = val('fPNombre');
+        if (nombre.length < 2){ aviso('#hojaAviso', 'P\u00f3ngale un nombre a la carpeta.', 'malo'); return false; }
+        var fila = { nombre:nombre,
+                     contratista:val('fPContra') || null,
+                     acordado:numero('fPAcordado'),
+                     nota:val('fPNota') || null };
+        var ruta, op;
+        if (p){ ruta = '/rest/v1/casa_proyectos?id=eq.' + p.id; op = { metodo:'PATCH', cuerpo:fila }; }
+        else { fila.casa_id = S.casa.id; fila.anoto = S.miNombre;
+               ruta = '/rest/v1/casa_proyectos'; op = { metodo:'POST', cuerpo:fila }; }
+        return pedir(ruta, op).then(function(resp){
+          if (resp.ok) return true;
+          return leerError(resp).then(function(m){
+            aviso('#hojaAviso', 'No se pudo guardar: ' + m, 'malo');
+            return false;
+          });
+        });
+      });
+  }
+
   function pintarMovimientos(){
     var items = [];
     S.envios.forEach(function(e){
@@ -1127,8 +1374,10 @@
   // ahi el no guarda nada, le MANDA a Nancy que lo corrija. El rotulo y el
   // color del boton son parte de lo que la pantalla dice.
   var hojaBoton = 'Guardar';
+  var antesDeHoja = 'app';
   function abrirHoja(titulo, cuerpo, accion, opciones){
     var o = opciones || {};
+    antesDeHoja = PANTALLA;
     $('#hojaTitulo').textContent = titulo;
     $('#hojaCuerpo').innerHTML = cuerpo;
     aviso('#hojaAviso', '');
@@ -1142,7 +1391,10 @@
     $('#hojaAtras').textContent = '← Regresar';
     ver('hoja');
   }
-  function cerrarHoja(){ hojaAccion = null; ver('app'); }
+  // Regresa a la pantalla desde donde la abrieron. Antes botaba siempre al
+  // principio, asi que anotar un gasto adentro de una carpeta lo sacaba de
+  // la carpeta.
+  function cerrarHoja(){ hojaAccion = null; ver(antesDeHoja || 'app'); }
   function val(id){ var e = document.getElementById(id); return e ? String(e.value || '').trim() : ''; }
   function numero(id){
     var t = val(id).replace(/,/g, '');
@@ -1369,10 +1621,27 @@
       .catch(function(e){ aviso('#hojaAviso', 'No se pudo borrar: ' + e.message); });
   }
 
-  function hojaGaste(){
+  // La primera opcion va VACIA a proposito: un select que llega con algo ya
+  // escogido manda datos que nadie puso (ya nos paso, con Basement y Drywall
+  // yendose a un PDF de seguro). La UNICA vez que llega escogida es cuando el
+  // abrio el formulario DESDE adentro de la carpeta: ahi si lo escogio el.
+  function campoProyecto(elegido){
+    var ps = proyActivos();
+    if (!ps.length) return '';
+    var o = '<option value="">— escoja la carpeta —</option>';
+    ps.forEach(function(p){
+      o += '<option value="' + esc(p.id) + '"' + (p.id === elegido ? ' selected' : '') + '>' +
+           esc(p.nombre) + '</option>';
+    });
+    o += '<option value="nada">Sin carpeta</option>';
+    return '<label for="fProy">¿De qué proyecto es?</label><select id="fProy">' + o + '</select>';
+  }
+
+  function hojaGaste(proyId){
     abrirHoja('Gasté', 
       '<label for="fMonto">¿Cuánto gastó? (' + simbolo() + ')</label>' +
       '<input id="fMonto" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00">' +
+      campoProyecto(proyId) +
       campoCategoria() +
       campoPersona('fAQuien', '¿A quién le pagó? (opcional)',
                    'Ferretería, el albañil, …', nombresDeDestino()) +
@@ -1388,9 +1657,16 @@
     if (!monto){ aviso('#hojaAviso', 'Escriba cuánto gastó.'); return Promise.resolve(false); }
     if (!cat){ aviso('#hojaAviso', 'Escoja en qué lo gastó.'); return Promise.resolve(false); }
     if (!f){ aviso('#hojaAviso', 'Ponga el día.'); return Promise.resolve(false); }
+    // Si hay carpetas, tiene que decir cual, aunque sea "Sin carpeta". Un
+    // gasto que cae en la carpeta equivocada mueve el "falta" de una obra.
+    var pid = $('#fProy') ? val('fProy') : 'nada';
+    if (proyActivos().length && !pid){
+      aviso('#hojaAviso', 'Escoja de qué proyecto es (o «Sin carpeta»).'); return Promise.resolve(false);
+    }
 
     var gasto = { casa_id:S.casa.id, gastado_el:f, gtq:monto, categoria:cat,
                   a_quien:val('fAQuien') || null,
+                  proyecto_id:(pid && pid !== 'nada') ? pid : null,
                   nota:val('fNota') || null, anoto:S.miNombre };
     var archivo = ($('#fFoto').files || [])[0] || null;
 
@@ -1694,6 +1970,7 @@
   // ====== ARRANQUE ============================================
   function arrancar(){
     $('#verTag').textContent = APP_BUILD;
+    ['#verTag2', '#verTag3'].forEach(function(id){ var e = $(id); if (e) e.textContent = APP_BUILD; });
     var vp = $('#verTagPuerta'); if (vp) vp.textContent = APP_BUILD;
     pintarPuerta();
 
@@ -1728,11 +2005,27 @@
       });
     });
     $('#btnMenu').addEventListener('click', hojaMenu);
-    $('#btnGaste').addEventListener('click', hojaGaste);
+    $('#btnGaste').addEventListener('click', function(){ hojaGaste(null); });
     $('#btnEntro').addEventListener('click', hojaEntro);
     $('#btnPreste').addEventListener('click', hojaPreste);
     $('#btnMande').addEventListener('click', hojaMande);
     $('#hojaCerrar').addEventListener('click', cerrarHoja);
+
+    // ---- las carpetas ----
+    $('#pillProy').addEventListener('click', irProyectos);
+    $('#pillHay2').addEventListener('click', function(){ ver('app'); });
+    $('#proyVolver').addEventListener('click', function(){ ver('app'); });
+    $('#unoAtras').addEventListener('click', irProyectos);
+    $('#unoAtras2').addEventListener('click', irProyectos);
+    $('#btnNuevoProy').addEventListener('click', function(){ hojaProyecto(null); });
+    $('#btnEditarProy').addEventListener('click', function(){ hojaProyecto(proyAbierto); });
+    $('#btnGastoProy').addEventListener('click', function(){ hojaGaste(proyAbierto); });
+    $('#proyRefrescar').addEventListener('click', function(){
+      var b = this; b.disabled = true; b.textContent = 'Revisando\u2026';
+      cargar().then(pintar).catch(function(e){
+        aviso('#proyAviso', 'No se pudo revisar: ' + (e.message || 'revise su internet'), 'malo');
+      }).then(function(){ b.disabled = false; b.textContent = 'Refrescar'; });
+    });
     $('#visorCerrar').addEventListener('click', function(){ $('#visor').hidden = true; $('#visorImg').src = ''; });
 
     $('#hojaGuardar').addEventListener('click', function(){
@@ -1767,8 +2060,9 @@
     });
 
     document.addEventListener('click', function(ev){
-      var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu],[data-foto-tomar],[data-foto-galeria],[data-foto-quitar],[data-prest],[data-saldar],[data-borrar-prest],[data-grupo],[data-revisar],[data-corregir],[data-quitarev]') : null;
+      var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu],[data-foto-tomar],[data-foto-galeria],[data-foto-quitar],[data-prest],[data-saldar],[data-borrar-prest],[data-grupo],[data-revisar],[data-corregir],[data-quitarev],[data-proy]') : null;
       if (!t) return;
+      if (t.dataset.proy){ abrirProyecto(t.dataset.proy); return; }
       if (t.dataset.revisar){ hojaRevisar(t.dataset.revisar, t.dataset.que, t.dataset.monto); return; }
       if (t.dataset.corregir){ hojaCorregir(t.dataset.corregir, t.dataset.monto); return; }
       if (t.dataset.quitarev){ quitarRevision(t.dataset.quitarev); return; }
