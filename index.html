@@ -287,7 +287,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-27-T';
+  var APP_BUILD = '2026-09-27-U';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -587,8 +587,20 @@
     guardarSesion();
   }
 
+  // LA LECCION DEL 27 DE SEPTIEMBRE. Esta funcion lee 'metodo' y 'cuerpo' en
+  // espanol. Tres llamadas se escribieron con 'method' y 'body' en ingles, asi
+  // que salieron como GET SIN CUERPO: el servidor las rechazo, nada se guardo,
+  // y la pantalla dijo que todo habia salido bien. Un envio que falla en
+  // silencio es peor que uno que falla de frente. Desde aqui, una llave que no
+  // se conoce revienta de una vez, en la primera prueba, en vez de convertirse
+  // en un GET mudo. Tambien: TODA respuesta se revisa con r.ok - fetch no
+  // reniega de un 400, lo entrega como si nada.
+  var API_LLAVES = { metodo:1, cuerpo:1, cab:1 };
   function api(ruta, opciones){
     var o = opciones || {};
+    Object.keys(o).forEach(function(k){
+      if (!API_LLAVES[k]) throw new Error('api(): la opcion "' + k + '" no existe. Son metodo, cuerpo, cab.');
+    });
     var cab = { apikey: CLOUD.anon, 'Content-Type': 'application/json' };
     if (S.tok) cab.Authorization = 'Bearer ' + S.tok;
     if (o.cab) Object.keys(o.cab).forEach(function(k){ cab[k] = o.cab[k]; });
@@ -824,9 +836,15 @@
       function(){
         var nota = ($('#fRevisar').value || '').trim();
         if (nota.length < 2){ aviso('#hojaAviso', 'Escriba qué hay que corregir.', 'malo'); return false; }
-        return pedir('/rest/v1/rpc/casa_pedir_revision', { method:'POST',
-          body: JSON.stringify({ p_tabla: r.tabla, p_id: r.id, p_nota: nota }) })
-          .then(function(){ return true; });
+        return pedir('/rest/v1/rpc/casa_pedir_revision', { metodo:'POST',
+          cuerpo:{ p_tabla: r.tabla, p_id: r.id, p_nota: nota } })
+          .then(function(resp){
+            if (resp.ok) return true;
+            return leerError(resp).then(function(m){
+              aviso('#hojaAviso', 'No se le pudo mandar a Nancy: ' + m, 'malo');
+              return false;
+            });
+          });
       },
       { boton: 'Enviar a Nancy', rojo: true });
   }
@@ -840,17 +858,26 @@
       function(){
         var v = parseFloat($('#fCorregir').value);
         if (!(v > 0)){ aviso('#hojaAviso', 'Escriba el monto correcto.', 'malo'); return false; }
-        return pedir('/rest/v1/rpc/casa_corregir_monto', { method:'POST',
-          body: JSON.stringify({ p_tabla: r.tabla, p_id: r.id, p_gtq: v, p_quien: S.miNombre || '' }) })
-          .then(function(){ return true; });
+        return pedir('/rest/v1/rpc/casa_corregir_monto', { metodo:'POST',
+          cuerpo:{ p_tabla: r.tabla, p_id: r.id, p_gtq: v, p_quien: S.miNombre || '' } })
+          .then(function(resp){
+            if (resp.ok) return true;
+            return leerError(resp).then(function(m){
+              aviso('#hojaAviso', 'No se pudo corregir: ' + m, 'malo');
+              return false;
+            });
+          });
       });
   }
   function quitarRevision(ref){
     var r = partirRef(ref);
     if (!confirm('¿Quitar el pedido? El monto se queda como está.')) return;
-    pedir('/rest/v1/rpc/casa_quitar_revision', { method:'POST',
-      body: JSON.stringify({ p_tabla: r.tabla, p_id: r.id }) })
-      .then(function(){ return cargar(); }).then(pintar)
+    pedir('/rest/v1/rpc/casa_quitar_revision', { metodo:'POST',
+      cuerpo:{ p_tabla: r.tabla, p_id: r.id } })
+      .then(function(resp){
+        if (resp.ok) return cargar();
+        return leerError(resp).then(function(m){ throw new Error(m); });
+      }).then(pintar)
       .catch(function(e){ aviso('#appAviso', 'No se pudo: ' + (e.message || 'revise su internet'), 'malo'); });
   }
 
