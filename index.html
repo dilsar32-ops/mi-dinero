@@ -104,6 +104,17 @@
   .catfila .v{font-weight:700; font-variant-numeric:tabular-nums}
   .catfila .b{grid-column:1 / -1}
 
+  /* ¿Está bien este monto? (27 sep 2026) */
+  .fila.enrevision{background:rgba(255,159,10,.08); border-radius:10px; padding-left:8px; padding-right:8px}
+  .revisa{margin-top:6px; font-size:13px; line-height:1.45; color:#ffb340;
+    background:rgba(255,159,10,.12); border:1px solid rgba(255,159,10,.45);
+    border-radius:10px; padding:8px 10px}
+  .revisa b{color:#ffcd7a}
+  .cuando.corregido{color:#3ddc84}
+  .chico{display:block; margin-top:6px; font-size:12px; font-weight:700; padding:7px 10px;
+    border-radius:8px; border:1px solid var(--linea); background:var(--tarjeta2);
+    color:var(--texto); cursor:pointer; min-height:34px}
+  .revisar-btn{opacity:.75}
   .miniftgr{width:46px; height:46px; border-radius:8px; object-fit:cover; border:1px solid var(--linea); background:var(--tarjeta2); cursor:pointer}
   .visor{position:fixed; inset:0; background:#000e; z-index:100; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px; padding:20px}
   .visor img{max-width:100%; max-height:80vh; border-radius:10px}
@@ -274,7 +285,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-26-Q';
+  var APP_BUILD = '2026-09-27-R';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -789,6 +800,56 @@
 
   // Al tocar una barra: TODO lo que hay detras de ese numero. Su queja:
   // "cien por ciento hermana Estela, pero no me da mas informacion".
+  // ====== ¿ESTÁ BIEN ESTE MONTO? (27 sep 2026) =================
+  // Su pedido: "necesito una opción de enviarle a ella que puede editar una
+  // casilla cada vez que yo crea que no está correcto el monto", y después:
+  // "solo yo tengo que tener la habilidad de enviarle".
+  // Por eso PEDIR es solo del dueño (la nube lo rechaza si no lo es), y ella
+  // no puede corregir nada que él no haya preguntado. Ningún número de este
+  // fondo se mueve en silencio.
+  function partirRef(ref){
+    var i = String(ref || '').indexOf(':');
+    return { tabla: ref.slice(0, i), id: ref.slice(i + 1) };
+  }
+  function hojaRevisar(ref){
+    var r = partirRef(ref);
+    abrirHoja('¿Está bien este monto?',
+      '<p class="sub">Escríbale qué le parece mal. A ella le va a salir esta nota junto al monto, ' +
+      'con un botón para corregirlo. Hasta que usted pregunte, ella no puede cambiarlo.</p>' +
+      '<label class="lbl">Qué le parece mal</label>' +
+      '<textarea id="fRevisar" rows="3" placeholder="Ej. ¿No serían Q11,750 en vez de Q117,500?"></textarea>',
+      function(){
+        var nota = ($('#fRevisar').value || '').trim();
+        if (nota.length < 2){ aviso('#hojaAviso', 'Escriba qué le parece mal.', 'malo'); return false; }
+        return pedir('/rest/v1/rpc/casa_pedir_revision', { method:'POST',
+          body: JSON.stringify({ p_tabla: r.tabla, p_id: r.id, p_nota: nota }) })
+          .then(function(){ return true; });
+      });
+  }
+  function hojaCorregir(ref, centAhora){
+    var r = partirRef(ref);
+    abrirHoja('Corregir el monto',
+      '<p class="sub">Ahora dice <b>' + plata(Number(centAhora) || 0) + '</b>. Escriba el monto correcto. ' +
+      'Lo que decía antes se guarda, para que los dos puedan verlo.</p>' +
+      '<label class="lbl">Monto correcto</label>' +
+      '<input id="fCorregir" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00">',
+      function(){
+        var v = parseFloat($('#fCorregir').value);
+        if (!(v > 0)){ aviso('#hojaAviso', 'Escriba el monto correcto.', 'malo'); return false; }
+        return pedir('/rest/v1/rpc/casa_corregir_monto', { method:'POST',
+          body: JSON.stringify({ p_tabla: r.tabla, p_id: r.id, p_gtq: v, p_quien: S.miNombre || '' }) })
+          .then(function(){ return true; });
+      });
+  }
+  function quitarRevision(ref){
+    var r = partirRef(ref);
+    if (!confirm('¿Quitar la pregunta? El monto se queda como está.')) return;
+    pedir('/rest/v1/rpc/casa_quitar_revision', { method:'POST',
+      body: JSON.stringify({ p_tabla: r.tabla, p_id: r.id }) })
+      .then(function(){ return cargar(); }).then(pintar)
+      .catch(function(e){ aviso('#appAviso', 'No se pudo: ' + (e.message || 'revise su internet'), 'malo'); });
+  }
+
   function hojaGrupo(grupo, quien){
     var sinAnotar = quien === 'Sin anotar';
     function coincide(v){ var t = (v || '').trim(); return sinAnotar ? !t : t === quien; }
@@ -877,13 +938,15 @@
           if (e.nota) partes.push(e.nota);
           return partes.join(' · ');
         })(),
-        cent:cent(e.gtq),
+        cent:cent(e.gtq), tipo2:'envios', anoto:e.anoto,
+        revisar:e.revisar || '', antes:(e.gtq_antes ? cent(e.gtq_antes) : 0), corrigio:e.corregido_por || '',
         quien:(e.recibio ? 'lo recibió ' + e.recibio : (e.confirmo || e.anoto)) });
     });
     S.gastos.forEach(function(g){
       items.push({ f:g.gastado_el, tipo:'sale', id:g.id,
         qué:g.categoria + (g.a_quien ? ' · a ' + g.a_quien : ''),
-        nota:g.nota || '', cent:cent(g.gtq),
+        nota:g.nota || '', cent:cent(g.gtq), tipo2:'gastos', anoto:g.anoto,
+        revisar:g.revisar || '', antes:(g.gtq_antes ? cent(g.gtq_antes) : 0), corrigio:g.corregido_por || '',
         foto:g.foto, quien:g.anoto });
     });
     items.sort(function(a, b){ return String(b.f).localeCompare(String(a.f)); });
@@ -894,15 +957,42 @@
     }
     var h = '';
     items.forEach(function(x){
-      h += '<div class="fila">' +
+      // ¿ESTÁ BIEN ESTE MONTO? (27 sep 2026). Él marca la entrada con su
+      // pregunta; en el teléfono de ella sale en ámbar y con el botón para
+      // corregir. Mientras él no pregunte, nadie cambia nada: ningún número de
+      // este fondo se mueve en silencio.
+      var pedido = '';
+      if (x.revisar){
+        pedido = '<div class="revisa">' +
+          '<b>' + (S.soyDueno ? 'Usted pidió revisar esto' : 'Le preguntan por este monto') + ':</b> ' +
+          esc(x.revisar) +
+          (S.soyDueno
+            ? '<button type="button" class="chico" data-quitarev="' + x.tipo2 + ':' + esc(x.id) + '">Ya no</button>'
+            : '<button type="button" class="chico" data-corregir="' + x.tipo2 + ':' + esc(x.id) + '" data-monto="' + x.cent + '">Corregir el monto</button>') +
+          '</div>';
+      }
+      var antes = x.antes
+        ? '<div class="cuando corregido">Corregido' + (x.corrigio ? ' por ' + esc(x.corrigio) : '') +
+          ' · antes decía ' + plata(x.antes) + '</div>'
+        : '';
+      // El botón de preguntar solo en lo que anotó ELLA, y solo del lado de él:
+      // pedirse una revisión a uno mismo no tiene sentido.
+      var yo = String(S.miNombre || '').trim().toLowerCase();
+      var loAnotoElla = String(x.anoto || '').trim().toLowerCase() !== yo;
+      var preguntar = (S.soyDueno && !x.revisar && loAnotoElla)
+        ? '<button type="button" class="chico revisar-btn" data-revisar="' + x.tipo2 + ':' + esc(x.id) + '">¿Está bien?</button>'
+        : '';
+      h += '<div class="fila' + (x.revisar ? ' enrevision' : '') + '">' +
         (x.foto ? '<img class="miniftgr" data-foto="' + esc(x.foto) + '" alt="Recibo">' : '') +
         '<div class="izq" style="flex:1">' +
           '<div class="qué">' + esc(x.qué) + '</div>' +
           '<div class="cuando">' + esc(fecha(x.f)) +
             (x.quien ? ' · ' + esc(x.quien) : '') +
             (x.nota ? ' · ' + esc(x.nota) : '') + '</div>' +
+          antes + pedido +
         '</div>' +
-        '<div class="monto ' + x.tipo + '">' + (x.tipo === 'entra' ? '+' : '−') + ' ' + plata(x.cent) + '</div>' +
+        '<div class="monto ' + x.tipo + '">' + (x.tipo === 'entra' ? '+' : '−') + ' ' + plata(x.cent) +
+          preguntar + '</div>' +
         '</div>';
     });
     $('#listaMov').innerHTML = h;
@@ -1626,8 +1716,11 @@
     });
 
     document.addEventListener('click', function(ev){
-      var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu],[data-foto-tomar],[data-foto-galeria],[data-foto-quitar],[data-prest],[data-saldar],[data-borrar-prest],[data-grupo]') : null;
+      var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu],[data-foto-tomar],[data-foto-galeria],[data-foto-quitar],[data-prest],[data-saldar],[data-borrar-prest],[data-grupo],[data-revisar],[data-corregir],[data-quitarev]') : null;
       if (!t) return;
+      if (t.dataset.revisar){ hojaRevisar(t.dataset.revisar); return; }
+      if (t.dataset.corregir){ hojaCorregir(t.dataset.corregir, t.dataset.monto); return; }
+      if (t.dataset.quitarev){ quitarRevision(t.dataset.quitarev); return; }
       if (t.dataset.grupo){ hojaGrupo(t.dataset.grupo, t.dataset.quien); return; }
       if (t.dataset.saldar){ saldarPrestamo(t.dataset.saldar); return; }
       if (t.dataset.borrarPrest){ borrarPrestamo(t.dataset.borrarPrest); return; }
