@@ -285,7 +285,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-27-R';
+  var APP_BUILD = '2026-09-27-S';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -813,10 +813,11 @@
   }
   function hojaRevisar(ref){
     var r = partirRef(ref);
-    abrirHoja('¿Está bien este monto?',
-      '<p class="sub">Escríbale qué le parece mal. A ella le va a salir esta nota junto al monto, ' +
-      'con un botón para corregirlo. Hasta que usted pregunte, ella no puede cambiarlo.</p>' +
-      '<label class="lbl">Qué le parece mal</label>' +
+    abrirHoja('Corregir este monto',
+      '<p class="sub">Esto se le manda a Nancy para que ella lo corrija y lo guarde. ' +
+      'Escríbale qué está mal: le va a salir junto al monto, con el botón para corregirlo. ' +
+      'Hasta que usted se lo mande, ella no puede cambiarlo.</p>' +
+      '<label class="lbl">Qué hay que corregir</label>' +
       '<textarea id="fRevisar" rows="3" placeholder="Ej. ¿No serían Q11,750 en vez de Q117,500?"></textarea>',
       function(){
         var nota = ($('#fRevisar').value || '').trim();
@@ -843,7 +844,7 @@
   }
   function quitarRevision(ref){
     var r = partirRef(ref);
-    if (!confirm('¿Quitar la pregunta? El monto se queda como está.')) return;
+    if (!confirm('¿Quitar el pedido? El monto se queda como está.')) return;
     pedir('/rest/v1/rpc/casa_quitar_revision', { method:'POST',
       body: JSON.stringify({ p_tabla: r.tabla, p_id: r.id }) })
       .then(function(){ return cargar(); }).then(pintar)
@@ -964,7 +965,7 @@
       var pedido = '';
       if (x.revisar){
         pedido = '<div class="revisa">' +
-          '<b>' + (S.soyDueno ? 'Usted pidió revisar esto' : 'Le preguntan por este monto') + ':</b> ' +
+          '<b>' + (S.soyDueno ? 'Le mandó a Nancy que lo corrija' : 'Le piden corregir este monto') + ':</b> ' +
           esc(x.revisar) +
           (S.soyDueno
             ? '<button type="button" class="chico" data-quitarev="' + x.tipo2 + ':' + esc(x.id) + '">Ya no</button>'
@@ -980,7 +981,7 @@
       var yo = String(S.miNombre || '').trim().toLowerCase();
       var loAnotoElla = String(x.anoto || '').trim().toLowerCase() !== yo;
       var preguntar = (S.soyDueno && !x.revisar && loAnotoElla)
-        ? '<button type="button" class="chico revisar-btn" data-revisar="' + x.tipo2 + ':' + esc(x.id) + '">¿Está bien?</button>'
+        ? '<button type="button" class="chico revisar-btn" data-revisar="' + x.tipo2 + ':' + esc(x.id) + '">Corregir</button>'
         : '';
       h += '<div class="fila' + (x.revisar ? ' enrevision' : '') + '">' +
         (x.foto ? '<img class="miniftgr" data-foto="' + esc(x.foto) + '" alt="Recibo">' : '') +
