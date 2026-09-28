@@ -376,7 +376,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-28-AA';
+  var APP_BUILD = '2026-09-28-AB';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -411,16 +411,33 @@
     (envios || []).forEach(function(e){ if (llego(e)) t += cent(e.gtq); });
     return t;
   }
+  // TODO lo que se ha gastado, venga de donde venga. Esto es "en que se fue
+  // el dinero" y por eso incluye el historial: fue gasto de verdad.
   function gastadoCent(gastos){
     var t = 0;
     (gastos || []).forEach(function(g){ t += cent(g.gtq); });
+    return t;
+  }
+  // LO QUE DE VERDAD SALE DEL FONDO. Sus palabras: "esos 45,000 ya se habian
+  // deducido mucho antes... no tienes que deducirlo del total". Un gasto
+  // marcado como historial ya estaba descontado del saldo cuando ocurrio;
+  // restarlo otra vez al subir el registro lo cuenta DOS VECES y el fondo se
+  // ve mas pobre de lo que es.
+  function gastadoDelFondoCent(gastos){
+    var t = 0;
+    (gastos || []).forEach(function(g){ if (!g.historico) t += cent(g.gtq); });
+    return t;
+  }
+  function historicoCent(gastos){
+    var t = 0;
+    (gastos || []).forEach(function(g){ if (g.historico) t += cent(g.gtq); });
     return t;
   }
   // Lo que ella tiene en la mano AHORA, en su moneda.
   // Lo prestado SALE del fondo (ese dinero ya no esta en la casa) y lo
   // que abonan REGRESA. Decision suya: "para que se pueda deducir".
   function saldoCent(envios, gastos, prestamos, abonos){
-    return recibidoCent(envios) - gastadoCent(gastos)
+    return recibidoCent(envios) - gastadoDelFondoCent(gastos)
          - prestadoCent(prestamos) + abonadoCent(abonos);
   }
   // Dolares que el ha mandado en total (haya llegado o no).
@@ -840,11 +857,15 @@
     num.textContent = plata(sc);
     num.className = 'gran' + (sc < 0 ? ' rojo' : '');
 
-    var rec = recibidoCent(S.envios), gas = gastadoCent(S.gastos);
-    // Si el rotulo de arriba es un saludo, el numero grande se queda sin
-    // explicacion: se le pone aqui.
+    var rec = recibidoCent(S.envios), sale = gastadoDelFondoCent(S.gastos),
+        hist = historicoCent(S.gastos);
+    // LAS CUENTAS TIENEN QUE CUADRAR A LA VISTA. Si aqui dijera el gasto
+    // TOTAL, el numero grande no daria y el pensaria que algo esta mal: el
+    // historial no se resta porque ya estaba descontado. Por eso va aparte y
+    // dicho con todas sus letras.
     $('#granSub').textContent = (S.soyDueno ? '' : 'Esto es lo que le queda. ') +
-      'Han llegado ' + plata(rec) + ' · se han gastado ' + plata(gas) +
+      'Han llegado ' + plata(rec) + ' · salió del fondo ' + plata(sale) +
+      (hist ? ' · además ' + plata(hist) + ' de historial, que ya estaba descontado de antes' : '') +
       (sc < 0 ? ' · hay más gastado que recibido, algo falta de anotar' : '');
 
     pintarCamino();
@@ -1164,10 +1185,11 @@
     if (!$('#cardSaldo')) return;
 
     var sc = saldoCent(S.envios, S.gastos, S.prestamos, S.abonos);
-    carpeta('#cardSaldo', 'Saldo', plata(sc), '', [
-      'Han llegado ' + plata(recibidoCent(S.envios)),
-      'Se han gastado ' + plata(gastadoCent(S.gastos))
-    ], sc < 0);
+    var lsaldo = ['Han llegado ' + plata(recibidoCent(S.envios)),
+                  'Salió del fondo ' + plata(gastadoDelFondoCent(S.gastos))];
+    var hh = historicoCent(S.gastos);
+    if (hh) lsaldo.push('Historial: ' + plata(hh) + ' (ya estaba descontado)');
+    carpeta('#cardSaldo', 'Saldo', plata(sc), '', lsaldo, sc < 0);
 
     var r = resumenDeProyectos(S.proyectos, S.gastos);
     var lp = [];
@@ -1741,6 +1763,23 @@
   // escogido manda datos que nadie puso (ya nos paso, con Basement y Drywall
   // yendose a un PDF de seguro). La UNICA vez que llega escogida es cuando el
   // abrio el formulario DESDE adentro de la carpeta: ahi si lo escogio el.
+  // LA PREGUNTA QUE PIDIO EL, y hay que hacerla SIEMPRE: "cada vez que anota
+  // algo tu tienes que preguntarle: esto ya se ha pagado, o es algo nuevo".
+  // De la respuesta depende si el saldo cambia o no, asi que no puede venir
+  // escogida de fabrica: la primera opcion va vacia, como el select de la
+  // carpeta.
+  function campoHistorial(){
+    return '<label for="fHist">\u00bfEste dinero ya estaba descontado del saldo?</label>' +
+      '<select id="fHist">' +
+        '<option value="">\u2014 escoja \u2014</option>' +
+        '<option value="si">S\u00ed \u00b7 ya sali\u00f3 hace tiempo, esto es solo el registro</option>' +
+        '<option value="no">No \u00b7 sale del fondo ahora</option>' +
+      '</select>' +
+      '<div class="sub" style="margin-top:6px">Si ya estaba descontado, el <b>saldo no cambia</b>: ' +
+      'la anotaci\u00f3n queda de registro y s\u00ed cuenta en la carpeta de la obra. ' +
+      'Si sale ahora, se <b>resta del saldo</b>.</div>';
+  }
+
   function campoProyecto(elegido){
     var ps = proyActivos();
     if (!ps.length) return '';
@@ -1767,6 +1806,7 @@
       '<label for="fMonto">' + (alDia ? '¿Cuánto se le dio?' : '¿Cuánto gastó?') +
         ' (' + simbolo() + ')</label>' +
       '<input id="fMonto" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00">' +
+      campoHistorial() +
       campoProyecto(proyId) +
       campoCategoria() +
       campoPersona('fAQuien', (alDia ? '¿A quién se le dio?' : '¿A quién le pagó? (opcional)'),
@@ -1802,9 +1842,17 @@
       aviso('#hojaAviso', 'Escoja de qué proyecto es (o «Sin carpeta»).'); return Promise.resolve(false);
     }
 
+    // Sin respuesta no se guarda: es la diferencia entre restar del saldo o no.
+    var hist = val('fHist');
+    if (!hist){
+      aviso('#hojaAviso', '¿Este dinero ya estaba descontado del saldo, o sale del fondo ahora?');
+      return Promise.resolve(false);
+    }
+
     var gasto = { casa_id:S.casa.id, gastado_el:f, gtq:monto, categoria:cat,
                   a_quien:val('fAQuien') || null,
                   proyecto_id:(pid && pid !== 'nada') ? pid : null,
+                  historico:(hist === 'si'),
                   nota:val('fNota') || null, anoto:S.miNombre };
     var archivo = ($('#fFoto').files || [])[0] || null;
 
