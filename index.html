@@ -2,7 +2,12 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- SIN ZOOM. Esto es un app, no un documento: el se mueve por la pantalla
+     con el dedo y pellizcaba sin querer, dejandola torcida y cortada.
+     maximum-scale/user-scalable lo apaga dentro del app del telefono; en
+     Safari iOS los ignora a proposito, y por eso ademas se cancelan los
+     gestos de pellizco mas abajo. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#11261f">
 <title>Arca</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -371,7 +376,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-28-Z';
+  var APP_BUILD = '2026-09-28-AA';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -2186,6 +2191,17 @@
     document.addEventListener('change', function(ev){
       if (ev.target && ev.target.id === 'fFoto') pintarFoto();
     });
+
+    // Safari de iOS IGNORA user-scalable=no a proposito (es una regla de
+    // accesibilidad de Apple), asi que en la version de la web hay que
+    // cancelar el gesto a mano. Dentro del app del telefono basta el meta,
+    // pero esto no estorba.
+    ['gesturestart', 'gesturechange', 'gestureend'].forEach(function(g){
+      document.addEventListener(g, function(ev){ ev.preventDefault(); }, { passive:false });
+    });
+    // NO se toca 'touchend'. Un preventDefault ahi se traga el clic que viene
+    // detras: dos botones distintos tocados rapido y el segundo no responde.
+    // El doble-toque ya lo mata 'touch-action:manipulation' del CSS.
 
     document.addEventListener('click', function(ev){
       var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu],[data-foto-tomar],[data-foto-galeria],[data-foto-quitar],[data-prest],[data-saldar],[data-borrar-prest],[data-grupo],[data-revisar],[data-corregir],[data-quitarev],[data-proy],[data-ir]') : null;
