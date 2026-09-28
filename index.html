@@ -19,7 +19,7 @@
   :root{
     --fondo:#0f1a16; --tarjeta:#16241f; --tarjeta2:#1d2f28;
     --linea:#274036; --texto:#eef5f1; --suave:#9db3a9;
-    --verde:#3fb984; --rojo:#e2685f; --ambar:#e0a44a;
+    --verde:#3fb984; --rojo:#e2685f; --ambar:#e0a44a; --azul:#6fa8dc;
     --r:14px;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
@@ -122,10 +122,19 @@
     border-radius:999px; padding:10px 4px; font-size:13px; font-weight:700; min-height:44px; cursor:pointer}
   .minibtn.on{background:var(--tarjeta2); color:var(--texto); border-color:var(--verde)}
   .proy{cursor:pointer}
-  .carpeta{cursor:pointer}
-  .carpeta .flecha{float:right; color:var(--suave); font-size:20px; line-height:1}
+  /* Cada carpeta con su color: una franja al lado y el rotulo del mismo
+     tono. El numero grande se queda blanco para que siempre se lea, y el
+     rojo de "se dio de mas" le sigue ganando a todo. */
+  .carpeta{cursor:pointer; position:relative; overflow:hidden; padding-left:22px;
+    background-color:var(--tarjeta); background-image:linear-gradient(var(--tinte), var(--tinte))}
+  .carpeta::before{content:''; position:absolute; left:0; top:0; bottom:0; width:6px; background:var(--color)}
+  .carpeta .granlbl{color:var(--color)}
+  .carpeta .flecha{float:right; color:var(--color); font-size:20px; line-height:1; opacity:.85}
   .carpeta .lineas{margin-top:10px; border-top:1px solid var(--linea); padding-top:9px}
   .carpeta .lineas div{color:var(--suave); font-size:13.5px; line-height:1.55}
+  #cardSaldo{--color:var(--verde); --tinte:rgba(63,185,132,.07)}
+  #cardProy {--color:var(--ambar); --tinte:rgba(224,164,74,.07)}
+  #cardDeben{--color:var(--azul);  --tinte:rgba(111,168,220,.07)}
   .barrota{height:10px; border-radius:5px; background:var(--linea); overflow:hidden; margin-top:12px}
   .barrota > i{display:block; height:100%; background:var(--verde); border-radius:5px}
   .barrota > i.pasado{background:var(--rojo)}
@@ -314,8 +323,6 @@
       <div id="listaDeben"></div>
     </div>
     <button class="btn" id="btnPreste">→ Presté dinero</button>
-    <div class="sub" id="prestNota" hidden>Los préstamos los anota Nancy desde su teléfono.
-    Usted los ve aquí. Si quiere poder anotarlos usted también, dígame y se lo agrego.</div>
     <button class="btn claro" id="prestVolver" style="margin-top:14px">← Regresar al inicio</button>
     <div class="pie">Arca · versión <span id="verTag4"></span></div>
   </div>
@@ -364,7 +371,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-28-Y';
+  var APP_BUILD = '2026-09-28-Z';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -845,13 +852,11 @@
     pintarMovimientos();
 
     $('#btnMande').hidden  = !S.soyDueno;
-    // Quien ANOTA un prestamo sigue siendo ella, por decision de el: "ella
-    // presta el dinero a otras personas... yo soy el que mando". Lo que si
-    // cambio es que ahora EL PUEDE VER la carpeta: antes la tarjeta se
-    // escondia sola cuando estaba vacia y nunca supo que existia.
-    $('#btnPreste').hidden =  S.soyDueno;
-    var nota = $('#prestNota');
-    if (nota) nota.hidden = !S.soyDueno;
+    // ANOTAR UN PRESTAMO LO PUEDEN LOS DOS (28 sep 2026, "si agregamelo a mi
+    // tambien"). Antes era solo de ella, por decision de el mismo: "ella
+    // presta el dinero a otras personas... yo soy el que mando". Cuando por
+    // fin vio la carpeta, pidio poder anotarlos el tambien. Mandar dolares
+    // (#btnMande) si sigue siendo solo de el: eso nunca lo hace ella.
     $('#cajaDueno').hidden = !S.soyDueno;
     $('#cajaCats').hidden = !S.gastos.length;
     $('#movTitulo').textContent = 'Todo lo que ha pasado';
