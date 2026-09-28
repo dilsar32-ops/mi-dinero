@@ -78,7 +78,7 @@
   .btn.claro{background:transparent}
   .btn.chico{min-height:38px; font-size:14px; font-weight:500; width:auto; padding:8px 14px}
   .dos{display:grid; grid-template-columns:1fr 1fr; gap:10px}
-  .tres{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px}
+  .tres{display:grid; grid-template-columns:repeat(auto-fit, minmax(0,1fr)); gap:8px}
   .tres .btn{padding:12px 6px; font-size:14px; line-height:1.2; min-height:58px}
 
   label{display:block; font-size:13px; color:var(--suave); margin:14px 0 6px}
@@ -119,9 +119,13 @@
   .revisar-btn{opacity:.75}
   .pills{display:flex; gap:8px; margin-bottom:14px}
   .minibtn{flex:1; background:var(--tarjeta); border:1px solid var(--linea); color:var(--suave);
-    border-radius:999px; padding:10px 8px; font-size:14px; font-weight:700; min-height:44px; cursor:pointer}
+    border-radius:999px; padding:10px 4px; font-size:13px; font-weight:700; min-height:44px; cursor:pointer}
   .minibtn.on{background:var(--tarjeta2); color:var(--texto); border-color:var(--verde)}
   .proy{cursor:pointer}
+  .carpeta{cursor:pointer}
+  .carpeta .flecha{float:right; color:var(--suave); font-size:20px; line-height:1}
+  .carpeta .lineas{margin-top:10px; border-top:1px solid var(--linea); padding-top:9px}
+  .carpeta .lineas div{color:var(--suave); font-size:13.5px; line-height:1.55}
   .barrota{height:10px; border-radius:5px; background:var(--linea); overflow:hidden; margin-top:12px}
   .barrota > i{display:block; height:100%; background:var(--verde); border-radius:5px}
   .barrota > i.pasado{background:var(--rojo)}
@@ -202,21 +206,30 @@
   </div>
 </div>
 
-<!-- ================= PANTALLA PRINCIPAL ================= -->
-<div id="app" hidden>
+<!-- ================= INICIO: las tres carpetas ================= -->
+<div id="inicio" hidden>
   <div class="barra">
     <h1 id="tituloFondo">Fondo de la casa</h1>
     <button class="btn chico claro" id="btnRefrescar">Refrescar</button>
     <button class="btn chico claro" id="btnMenu">···</button>
   </div>
   <div class="env">
-    <div id="appAviso"></div>
+    <div id="inicioAviso"></div>
+    <div class="tarjeta carpeta" data-ir="app" id="cardSaldo"></div>
+    <div class="tarjeta carpeta" data-ir="proyectos" id="cardProy"></div>
+    <div class="tarjeta carpeta" data-ir="prestado" id="cardDeben"></div>
+    <div class="pie">Arca · versión <span id="verTag5"></span></div>
+  </div>
+</div>
 
-    <!-- el menu: lo que hay | proyectos -->
-    <div class="pills">
-      <button class="minibtn on" id="pillHay">Lo que hay</button>
-      <button class="minibtn" id="pillProy">Proyectos</button>
-    </div>
+<!-- ================= SALDO ================= -->
+<div id="app" hidden>
+  <div class="barra">
+    <h1>Saldo</h1>
+    <button class="btn chico claro" id="saldoAtras">← Regresar</button>
+  </div>
+  <div class="env">
+    <div id="appAviso"></div>
 
     <!-- lo que hay -->
     <div class="tarjeta">
@@ -232,7 +245,6 @@
     <div class="tres" style="margin-bottom:14px">
       <button class="btn verde" id="btnEntro">+ Entró<br>dinero</button>
       <button class="btn" id="btnGaste">− Gasté</button>
-      <button class="btn" id="btnPreste">→ Presté<br>dinero</button>
       <button class="btn" id="btnMande" hidden>Mandé<br>dinero →</button>
     </div>
 
@@ -253,11 +265,6 @@
       <div id="listaOrigen"></div>
     </div>
 
-    <div class="tarjeta" id="cajaDeben" hidden>
-      <h2>Quién nos debe</h2>
-      <div id="listaDeben"></div>
-    </div>
-
     <div class="tarjeta" id="cajaReceptor" hidden>
       <h2>Quién ha recibido el dinero</h2>
       <div id="listaReceptor"></div>
@@ -274,6 +281,7 @@
       <div id="listaMov"><div class="sub">Cargando…</div></div>
     </div>
 
+    <button class="btn claro" id="saldoAtras2">← Regresar al inicio</button>
     <div class="pie">Arca · versión <span id="verTag"></span></div>
   </div>
 </div>
@@ -282,18 +290,34 @@
 <div id="proyectos" hidden>
   <div class="barra">
     <h1>Proyectos</h1>
-    <button class="btn chico claro" id="proyRefrescar">Refrescar</button>
+    <button class="btn chico claro" id="proyAtras">← Regresar</button>
   </div>
   <div class="env">
     <div id="proyAviso"></div>
-    <div class="pills">
-      <button class="minibtn" id="pillHay2">Lo que hay</button>
-      <button class="minibtn on">Proyectos</button>
-    </div>
     <div id="listaProy"></div>
     <button class="btn" id="btnNuevoProy" hidden>+ Nueva carpeta</button>
-    <button class="btn claro" id="proyVolver" style="margin-top:14px">← Regresar a Lo que hay</button>
+    <button class="btn claro" id="proyVolver" style="margin-top:14px">← Regresar al inicio</button>
     <div class="pie">Arca · versión <span id="verTag2"></span></div>
+  </div>
+</div>
+
+<!-- ================= PRESTADO (a quienes les hemos dado dinero) ================= -->
+<div id="prestado" hidden>
+  <div class="barra">
+    <h1>Prestado</h1>
+    <button class="btn chico claro" id="prestAtras">← Regresar</button>
+  </div>
+  <div class="env">
+    <div id="prestAviso"></div>
+    <div class="tarjeta" id="cajaDeben">
+      <h2>Quién nos debe</h2>
+      <div id="listaDeben"></div>
+    </div>
+    <button class="btn" id="btnPreste">→ Presté dinero</button>
+    <div class="sub" id="prestNota" hidden>Los préstamos los anota Nancy desde su teléfono.
+    Usted los ve aquí. Si quiere poder anotarlos usted también, dígame y se lo agrego.</div>
+    <button class="btn claro" id="prestVolver" style="margin-top:14px">← Regresar al inicio</button>
+    <div class="pie">Arca · versión <span id="verTag4"></span></div>
   </div>
 </div>
 
@@ -340,7 +364,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-27-X';
+  var APP_BUILD = '2026-09-28-Y';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -595,6 +619,22 @@
     return (gastos || []).filter(function(g){ return !g.proyecto_id; });
   }
 
+  // Para la tarjeta de Proyectos del inicio. Si ninguna obra tiene precio
+  // acordado no hay contra que comparar, asi que se ensena lo YA DADO y se
+  // dice que es eso. Inventar un "falta" sin trato cerrado seria mentir.
+  function resumenDeProyectos(proyectos, gastos){
+    var dado = 0, falta = 0, conPrecio = 0;
+    (proyectos || []).forEach(function(p){
+      if (p.activo === false) return;
+      var d = dadoCent(gastos, p.id);
+      dado += d;
+      var f = faltaCent(p.acordado, d);
+      if (f !== null){ conPrecio++; falta += f; }
+    });
+    return { dado:dado, falta:conPrecio ? falta : null, conPrecio:conPrecio,
+             cuantos:(proyectos || []).filter(function(p){ return p.activo !== false; }).length };
+  }
+
   // ====== FIN DE LAS CUENTAS ==================================
 
   var S = { tok:null, ref:null, correo:null, uid:null, vence:0,
@@ -634,7 +674,7 @@
   // regrese a donde lo abrio y no lo bote al principio.
   var PANTALLA = 'app';
   function ver(cual){
-    ['puerta','armar','espera','app','proyectos','proyecto','hoja'].forEach(function(id){
+    ['puerta','armar','espera','inicio','app','proyectos','prestado','proyecto','hoja'].forEach(function(id){
       var e = document.getElementById(id);
       if (e) e.hidden = (id !== cual);
     });
@@ -774,6 +814,7 @@
 
   // ====== PINTAR ==============================================
   function pintar(){
+    pintarInicio();
     pintarProyectos();
     if (proyAbierto) pintarProyecto();
     var sc = saldoCent(S.envios, S.gastos, S.prestamos, S.abonos);
@@ -804,12 +845,18 @@
     pintarMovimientos();
 
     $('#btnMande').hidden  = !S.soyDueno;
+    // Quien ANOTA un prestamo sigue siendo ella, por decision de el: "ella
+    // presta el dinero a otras personas... yo soy el que mando". Lo que si
+    // cambio es que ahora EL PUEDE VER la carpeta: antes la tarjeta se
+    // escondia sola cuando estaba vacia y nunca supo que existia.
     $('#btnPreste').hidden =  S.soyDueno;
+    var nota = $('#prestNota');
+    if (nota) nota.hidden = !S.soyDueno;
     $('#cajaDueno').hidden = !S.soyDueno;
     $('#cajaCats').hidden = !S.gastos.length;
     $('#movTitulo').textContent = 'Todo lo que ha pasado';
     $('#verTag').textContent = APP_BUILD;
-    ['#verTag2', '#verTag3'].forEach(function(id){ var e = $(id); if (e) e.textContent = APP_BUILD; });
+    ['#verTag2', '#verTag3', '#verTag4', '#verTag5'].forEach(function(id){ var e = $(id); if (e) e.textContent = APP_BUILD; });
   }
 
   // ¿Este dinero salio de SU cuenta? Solo entonces tiene sentido
@@ -1087,6 +1134,52 @@
     if (p.contratista) l.push(esc(p.contratista));
     l.push(r.cuantos + (r.cuantos === 1 ? ' anotaci\u00f3n' : ' anotaciones'));
     return '<div class="sub">' + l.join(' \u00b7 ') + '</div>';
+  }
+
+  // ---- INICIO: las tres carpetas, cada una con su numero -------
+  function lineas(ls){
+    return '<div class="lineas">' + ls.map(function(l){ return '<div>' + l + '</div>'; }).join('') + '</div>';
+  }
+  function carpeta(id, titulo, num, rotulo, ls, rojo){
+    var e = $(id);
+    if (!e) return;
+    e.innerHTML = '<span class="flecha">\u203a</span>' +
+      '<div class="granlbl">' + esc(titulo) + '</div>' +
+      '<div class="gran' + (rojo ? ' rojo' : '') + '">' + num + '</div>' +
+      (rotulo ? '<div class="sub">' + rotulo + '</div>' : '') +
+      (ls.length ? lineas(ls) : '');
+  }
+
+  function pintarInicio(){
+    if (!$('#cardSaldo')) return;
+
+    var sc = saldoCent(S.envios, S.gastos, S.prestamos, S.abonos);
+    carpeta('#cardSaldo', 'Saldo', plata(sc), '', [
+      'Han llegado ' + plata(recibidoCent(S.envios)),
+      'Se han gastado ' + plata(gastadoCent(S.gastos))
+    ], sc < 0);
+
+    var r = resumenDeProyectos(S.proyectos, S.gastos);
+    var lp = [];
+    (S.proyectos || []).filter(function(p){ return p.activo !== false; }).slice(0, 3).forEach(function(p){
+      var d = dadoCent(S.gastos, p.id), f = faltaCent(p.acordado, d);
+      lp.push(esc(p.nombre) + ' \u00b7 ' + (f === null
+        ? 'dado ' + plata(d) + ' (sin precio)'
+        : (f < 0 ? 'se dio de m\u00e1s ' + plata(-f) : 'falta ' + plata(f))));
+    });
+    if (!r.cuantos) lp.push('Todav\u00eda no hay ninguna carpeta.');
+    carpeta('#cardProy', 'Proyectos',
+      plata(r.falta === null ? r.dado : Math.abs(r.falta)),
+      r.falta === null ? 'ya se ha dado' : (r.falta < 0 ? 'SE DIO DE M\u00c1S' : 'falta por dar'),
+      lp, r.falta !== null && r.falta < 0);
+
+    var filas = cuentaPrestamos(S.prestamos, S.abonos, hoy());
+    var ld = filas.length
+      ? filas.slice(0, 3).map(function(f){ return esc(f.aQuien) + ' \u00b7 ' + plata(f.cuenta.debe); })
+      : ['Nadie debe nada.'];
+    if (filas.length > 3) ld.push('y ' + (filas.length - 3) + ' m\u00e1s\u2026');
+    carpeta('#cardDeben', 'Deben', plata(debenCent(filas)),
+      filas.length ? (filas.length === 1 ? '1 persona' : filas.length + ' personas') : '', ld, false);
   }
 
   function pintarProyectos(){
@@ -1481,10 +1574,18 @@
 
   // ---- QUIEN NOS DEBE ----------------------------------------
   function pintarDeben(){
+    var lista = $('#listaDeben');
+    if (!lista) return;
     var filas = cuentaPrestamos(S.prestamos, S.abonos, hoy());
-    var caja = $('#cajaDeben'), lista = $('#listaDeben');
-    if (!filas.length){ caja.hidden = true; lista.innerHTML = ''; return; }
-    caja.hidden = false;
+    // Antes esta tarjeta se ESCONDIA cuando no habia nada, y vivia en la
+    // pantalla principal. Por eso el nunca supo que existia. Ahora es un
+    // lugar: un lugar vacio dice que esta vacio y para que sirve.
+    if (!filas.length){
+      lista.innerHTML = '<div class="sub">Todav\u00eda no se le ha prestado dinero a nadie.<br><br>' +
+        'Aqu\u00ed se anota el dinero del fondo que sale prestado. Se le puede poner un inter\u00e9s ' +
+        'por mes, y cuando la persona abone, ese dinero vuelve a entrar al fondo.</div>';
+      return;
+    }
 
     var total = debenCent(filas), h = '';
     filas.forEach(function(f){
@@ -1957,7 +2058,7 @@
       return colaVaciar().then(function(n){
         if (n > 0) return cargar();
       }).then(function(){
-        pintar(); ver('app');
+        pintar(); ver('inicio');
       });
     }).catch(function(e){
       if (String(e.message) === 'sesion-vencida'){ olvidarSesion(); ver('puerta'); return; }
@@ -1987,7 +2088,7 @@
       p_nombre:nombre, p_moneda:mon[0], p_simbolo:mon[1] || 'Q', p_mi_nombre:yo
     }}).then(function(r){
       if (!r.ok) return leerError(r).then(function(m){ throw new Error(m); });
-      return cargar().then(function(){ pintar(); ver('app'); });
+      return cargar().then(function(){ pintar(); ver('inicio'); });
     }).catch(function(e){ aviso('#armarAviso', 'No se pudo crear: ' + e.message); })
       .then(function(){ btn.disabled = false; btn.textContent = 'Crear el fondo'; });
   }
@@ -1997,7 +2098,7 @@
   // ====== ARRANQUE ============================================
   function arrancar(){
     $('#verTag').textContent = APP_BUILD;
-    ['#verTag2', '#verTag3'].forEach(function(id){ var e = $(id); if (e) e.textContent = APP_BUILD; });
+    ['#verTag2', '#verTag3', '#verTag4', '#verTag5'].forEach(function(id){ var e = $(id); if (e) e.textContent = APP_BUILD; });
     var vp = $('#verTagPuerta'); if (vp) vp.textContent = APP_BUILD;
     pintarPuerta();
 
@@ -2039,20 +2140,15 @@
     $('#hojaCerrar').addEventListener('click', cerrarHoja);
 
     // ---- las carpetas ----
-    $('#pillProy').addEventListener('click', irProyectos);
-    $('#pillHay2').addEventListener('click', function(){ ver('app'); });
-    $('#proyVolver').addEventListener('click', function(){ ver('app'); });
+    ['#proyVolver', '#prestVolver', '#proyAtras', '#prestAtras', '#saldoAtras', '#saldoAtras2']
+      .forEach(function(id){
+        var e = $(id); if (e) e.addEventListener('click', function(){ ver('inicio'); });
+      });
     $('#unoAtras').addEventListener('click', irProyectos);
     $('#unoAtras2').addEventListener('click', irProyectos);
     $('#btnNuevoProy').addEventListener('click', function(){ hojaProyecto(null); });
     $('#btnEditarProy').addEventListener('click', function(){ hojaProyecto(proyAbierto); });
     $('#btnGastoProy').addEventListener('click', function(){ hojaGaste(proyAbierto); });
-    $('#proyRefrescar').addEventListener('click', function(){
-      var b = this; b.disabled = true; b.textContent = 'Revisando\u2026';
-      cargar().then(pintar).catch(function(e){
-        aviso('#proyAviso', 'No se pudo revisar: ' + (e.message || 'revise su internet'), 'malo');
-      }).then(function(){ b.disabled = false; b.textContent = 'Refrescar'; });
-    });
     $('#visorCerrar').addEventListener('click', function(){ $('#visor').hidden = true; $('#visorImg').src = ''; });
 
     $('#hojaGuardar').addEventListener('click', function(){
@@ -2087,8 +2183,13 @@
     });
 
     document.addEventListener('click', function(ev){
-      var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu],[data-foto-tomar],[data-foto-galeria],[data-foto-quitar],[data-prest],[data-saldar],[data-borrar-prest],[data-grupo],[data-revisar],[data-corregir],[data-quitarev],[data-proy]') : null;
+      var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu],[data-foto-tomar],[data-foto-galeria],[data-foto-quitar],[data-prest],[data-saldar],[data-borrar-prest],[data-grupo],[data-revisar],[data-corregir],[data-quitarev],[data-proy],[data-ir]') : null;
       if (!t) return;
+      if (t.dataset.ir){
+        if (t.dataset.ir === 'proyectos') irProyectos();
+        else ver(t.dataset.ir);
+        return;
+      }
       if (t.dataset.proy){ abrirProyecto(t.dataset.proy); return; }
       if (t.dataset.revisar){ hojaRevisar(t.dataset.revisar, t.dataset.que, t.dataset.monto); return; }
       if (t.dataset.corregir){ hojaCorregir(t.dataset.corregir, t.dataset.monto); return; }
