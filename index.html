@@ -376,7 +376,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-28-AB';
+  var APP_BUILD = '2026-09-30-AC';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -1252,13 +1252,13 @@
     if (g.a_quien) partes.push('a ' + g.a_quien);
     if (g.nota) partes.push(g.nota);
     if (g.anoto) partes.push('lo apunt\u00f3 ' + g.anoto);
-    return '<div class="fila">' +
+    return '<div class="fila" data-gasto="' + esc(g.id) + '" style="cursor:pointer">' +
       (g.foto ? '<img class="miniftgr" data-foto="' + esc(g.foto) + '" alt="Recibo">' : '') +
       '<div class="izq" style="flex:1">' +
         '<div class="qu\u00e9">' + esc(g.categoria || 'Gasto') + '</div>' +
         '<div class="cuando">' + esc(partes.join(' \u00b7 ')) + '</div>' +
       '</div>' +
-      '<div class="monto sale">\u2212 ' + plata(cent(g.gtq)) + '</div></div>';
+      '<div class="monto sale">\u2212 ' + plata(cent(g.gtq)) + ' \u203a</div></div>';
   }
 
   function pintarProyecto(){
@@ -1288,6 +1288,74 @@
     $('#unoLista').innerHTML = gs.length
       ? gs.map(filaGasto).join('')
       : '<div class="sub">Todav\u00eda no se ha anotado nada en esta carpeta.</div>';
+  }
+
+  // CORREGIR O BORRAR UNA ANOTACION (30 sep 2026). Su pedido: "Nancy added
+  // that in the wrong section so we have to delete it, also i need option like
+  // this to delete or fix it myself".
+  // La base ya lo permitia a los dos (politicas gastos_editar y gastos_borrar
+  // son de miembro): lo que faltaba era la pantalla. Se deja para los dos a
+  // proposito - quien se equivoca es quien lo nota, y hacerla esperar a que el
+  // lo arregle es como se quedan los errores puestos.
+  function gastoPorId(id){
+    return (S.gastos || []).filter(function(g){ return g.id === id; })[0] || null;
+  }
+  function hojaGasto(id){
+    var g = gastoPorId(id);
+    if (!g) return;
+    abrirHoja('Corregir esta anotaci\u00f3n',
+      '<p class="sub">La apunt\u00f3 ' + esc(g.anoto || '') + ' el ' + esc(fecha(g.gastado_el)) +
+      '. Cambie lo que est\u00e9 mal y guarde, o b\u00f3rrela abajo.</p>' +
+      '<label for="fMonto">Monto (' + simbolo() + ')</label>' +
+      '<input id="fMonto" type="number" inputmode="decimal" step="0.01" min="0" value="' +
+        esc(g.gtq) + '">' +
+      campoHistorial(g.historico ? 'si' : 'no') +
+      campoProyecto(g.proyecto_id || 'nada') +
+      campoCategoria(g.categoria) +
+      campoPersona('fAQuien', '\u00bfA qui\u00e9n se le dio?', '', nombresDeDestino()) +
+      '<label for="fNota">\u00bfQu\u00e9 fue? (opcional)</label>' +
+      '<input id="fNota" type="text" value="' + esc(g.nota || '') + '">' +
+      campoFecha('fFecha', '\u00bfQu\u00e9 d\u00eda?', g.gastado_el) +
+      '<button class="btn claro" data-borrar-gasto="' + esc(g.id) + '" style="margin-top:18px">' +
+      'Borrar esta anotaci\u00f3n</button>',
+      function(){
+        var monto = numero('fMonto'), cat = val('fCat'), f = val('fFecha'), hist = val('fHist');
+        if (!monto){ aviso('#hojaAviso', 'Escriba el monto.', 'malo'); return false; }
+        if (!cat){ aviso('#hojaAviso', 'Escoja en qu\u00e9 se gast\u00f3.', 'malo'); return false; }
+        if (!f){ aviso('#hojaAviso', 'Ponga el d\u00eda.', 'malo'); return false; }
+        if (f > hoy()){ aviso('#hojaAviso', 'Esa fecha todav\u00eda no llega.', 'malo'); return false; }
+        if (!hist){ aviso('#hojaAviso', '\u00bfYa estaba descontado, o sale del fondo ahora?', 'malo'); return false; }
+        var pid = $('#fProy') ? val('fProy') : 'nada';
+        if (proyActivos().length && !pid){
+          aviso('#hojaAviso', 'Escoja de qu\u00e9 proyecto es (o \u00abSin carpeta\u00bb).', 'malo'); return false;
+        }
+        return pedir('/rest/v1/casa_gastos?id=eq.' + id, { metodo:'PATCH', cuerpo:{
+            gtq:monto, categoria:cat, gastado_el:f,
+            historico:(hist === 'si'),
+            proyecto_id:(pid && pid !== 'nada') ? pid : null,
+            a_quien:val('fAQuien') || null, nota:val('fNota') || null
+          } }).then(function(resp){
+            if (resp.ok) return true;
+            return leerError(resp).then(function(m){
+              aviso('#hojaAviso', 'No se pudo guardar: ' + m, 'malo'); return false;
+            });
+          });
+      });
+  }
+  function borrarGasto(id){
+    var g = gastoPorId(id);
+    if (!g) return;
+    // Se dice QUE le pasa al saldo, que es lo que de verdad importa y no es
+    // obvio: si era historial, borrarla no devuelve nada porque nunca se resto.
+    var efecto = g.historico
+      ? 'El saldo no cambia (esa anotaci\u00f3n era historial y nunca se rest\u00f3).'
+      : 'Esos ' + plata(cent(g.gtq)) + ' regresan al saldo.';
+    if (!confirm('\u00bfBorrar ' + (g.categoria || 'esta anotaci\u00f3n') + ' de ' + plata(cent(g.gtq)) + '?\n\n' +
+                 efecto + '\n\nNo se puede deshacer.')) return;
+    pedir('/rest/v1/casa_gastos?id=eq.' + id, { metodo:'DELETE' })
+      .then(function(r){ if (!r.ok) return leerError(r).then(function(m){ throw new Error(m); }); })
+      .then(function(){ cerrarHoja(); return cargar(); }).then(pintar)
+      .catch(function(e){ aviso('#hojaAviso', 'No se pudo borrar: ' + e.message, 'malo'); });
   }
 
   function irProyectos(){ proyAbierto = null; pintarProyectos(); ver('proyectos'); }
@@ -1598,9 +1666,20 @@
     i.click();
   }
 
-  function campoCategoria(){
-    var o = '<option value="">— escoja —</option>';
-    S.cats.forEach(function(c){ o += '<option value="' + esc(c.nombre) + '">' + esc(c.nombre) + '</option>'; });
+  // Al CORREGIR llega con la suya ya escogida: ahi no es un valor de fabrica,
+  // es lo que la anotacion dice hoy. Al crear sigue llegando vacia.
+  function campoCategoria(elegida){
+    var o = '<option value="">— escoja —</option>', vistas = {};
+    S.cats.forEach(function(c){
+      vistas[c.nombre] = 1;
+      o += '<option value="' + esc(c.nombre) + '"' + (c.nombre === elegida ? ' selected' : '') +
+           '>' + esc(c.nombre) + '</option>';
+    });
+    // Si la categoria que tiene ya no esta en la lista (la quitaron), se agrega
+    // igual: si no, corregir el monto le cambiaria la categoria sin avisar.
+    if (elegida && !vistas[elegida]){
+      o += '<option value="' + esc(elegida) + '" selected>' + esc(elegida) + '</option>';
+    }
     return '<label for="fCat">¿En qué lo gastó?</label><select id="fCat">' + o + '</select>';
   }
 
@@ -1768,12 +1847,12 @@
   // De la respuesta depende si el saldo cambia o no, asi que no puede venir
   // escogida de fabrica: la primera opcion va vacia, como el select de la
   // carpeta.
-  function campoHistorial(){
+  function campoHistorial(elegido){
     return '<label for="fHist">\u00bfEste dinero ya estaba descontado del saldo?</label>' +
       '<select id="fHist">' +
         '<option value="">\u2014 escoja \u2014</option>' +
-        '<option value="si">S\u00ed \u00b7 ya sali\u00f3 hace tiempo, esto es solo el registro</option>' +
-        '<option value="no">No \u00b7 sale del fondo ahora</option>' +
+        '<option value="si"' + (elegido === 'si' ? ' selected' : '') + '>S\u00ed \u00b7 ya sali\u00f3 hace tiempo, esto es solo el registro</option>' +
+        '<option value="no"' + (elegido === 'no' ? ' selected' : '') + '>No \u00b7 sale del fondo ahora</option>' +
       '</select>' +
       '<div class="sub" style="margin-top:6px">Si ya estaba descontado, el <b>saldo no cambia</b>: ' +
       'la anotaci\u00f3n queda de registro y s\u00ed cuenta en la carpeta de la obra. ' +
@@ -2252,8 +2331,10 @@
     // El doble-toque ya lo mata 'touch-action:manipulation' del CSS.
 
     document.addEventListener('click', function(ev){
-      var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu],[data-foto-tomar],[data-foto-galeria],[data-foto-quitar],[data-prest],[data-saldar],[data-borrar-prest],[data-grupo],[data-revisar],[data-corregir],[data-quitarev],[data-proy],[data-ir]') : null;
+      var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu],[data-foto-tomar],[data-foto-galeria],[data-foto-quitar],[data-prest],[data-saldar],[data-borrar-prest],[data-grupo],[data-revisar],[data-corregir],[data-quitarev],[data-proy],[data-ir],[data-gasto],[data-borrar-gasto]') : null;
       if (!t) return;
+      if (t.dataset.borrarGasto){ borrarGasto(t.dataset.borrarGasto); return; }
+      if (t.dataset.gasto){ hojaGasto(t.dataset.gasto); return; }
       if (t.dataset.ir){
         if (t.dataset.ir === 'proyectos') irProyectos();
         else ver(t.dataset.ir);
