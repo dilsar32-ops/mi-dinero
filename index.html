@@ -429,7 +429,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-30-AF';
+  var APP_BUILD = '2026-09-30-AG';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -1157,7 +1157,11 @@
       .catch(function(e){ aviso('#appAviso', 'No se pudo: ' + (e.message || 'revise su internet'), 'malo'); });
   }
 
+  // Cual grupo esta abierto, para poder regresar a el desde la ventana de
+  // una de sus lineas.
+  var grupoAbierto = null;
   function hojaGrupo(grupo, quien){
+    grupoAbierto = [grupo, quien];
     var sinAnotar = quien === 'Sin anotar';
     function coincide(v){ var t = (v || '').trim(); return sinAnotar ? !t : t === quien; }
     var titulo = '', lineas = [], total = 0;
@@ -1168,7 +1172,8 @@
         if (!llego(e)) return;
         if (!coincide(grupo === 'origen' ? e.de_quien : e.recibio)) return;
         total += cent(e.gtq);
-        lineas.push({ f:e.llego_el, monto:cent(e.gtq), tipo:'entra',
+        lineas.push({ f:e.llego_el, monto:cent(e.gtq), tipo:'entra', id:e.id, qué2:'envio',
+          foto:e.foto,
           qué:'Entró dinero' + (e.como ? ' · ' + e.como : ''),
           pie:[grupo === 'origen' && e.recibio ? 'lo recibió ' + e.recibio : '',
                grupo === 'receptor' && e.de_quien ? 'de ' + e.de_quien : '',
@@ -1182,6 +1187,7 @@
         if (!coincide(grupo === 'destino' ? g.a_quien : g.categoria)) return;
         total += cent(g.gtq);
         lineas.push({ f:g.gastado_el, monto:cent(g.gtq), tipo:'sale', foto:g.foto,
+          id:g.id, qué2:'gasto',
           qué:grupo === 'destino' ? g.categoria : (g.a_quien ? 'a ' + g.a_quien : 'Gasto'),
           pie:[g.nota || '', g.anoto ? 'anotó ' + g.anoto : ''].filter(Boolean).join(' · ') });
       });
@@ -1193,14 +1199,16 @@
             '</div></div><div class="monto">' + plata(total) + '</div></div>' +
             '<div style="height:10px"></div>';
     lineas.forEach(function(x){
-      h += '<div class="fila">' +
-        (x.foto ? '<img class="miniftgr" data-foto="' + esc(x.foto) + '" alt="Recibo">' : '') +
+      // Cada linea abre SU ventana, con su foto adentro. Al regresar vuelve a
+      // este mismo grupo (volverA), no a la pantalla de atras.
+      h += '<div class="fila" data-engrupo="' + esc(x.qué2) + ':' + esc(x.id) +
+        '" style="cursor:pointer">' +
         '<div class="izq" style="flex:1">' +
-          '<div class="qué">' + esc(x.qué) + '</div>' +
+          '<div class="qué">' + (x.foto ? '\ud83d\udcce ' : '') + esc(x.qué) + '</div>' +
           '<div class="cuando">' + esc(fecha(x.f)) + (x.pie ? ' · ' + esc(x.pie) : '') + '</div>' +
         '</div>' +
         '<div class="monto ' + x.tipo + '">' + (x.tipo === 'entra' ? '+' : '−') + ' ' +
-          plata(x.monto) + '</div></div>';
+          plata(x.monto) + ' \u203a</div></div>';
     });
     if (!lineas.length) h = '<div class="sub">No hay nada apuntado aquí.</div>';
     abrirHoja(titulo, h, null);
@@ -1433,7 +1441,7 @@
   // ver el recibo habia que tocar la fotito de afuera. Ahora primero se VE
   // (con su foto adentro) y desde ahi se corrige o se borra, que es el orden
   // en que uno hace las cosas: mirar y despues decidir.
-  function hojaVerGasto(id){
+  function hojaVerGasto(id, volverA){
     var g = gastoPorId(id);
     if (!g) return;
     var p = g.proyecto_id ? proyPorId(g.proyecto_id) : null;
@@ -1470,9 +1478,51 @@
         'Corregir este gasto</button>' +
       '<button class="btn claro" data-borrar-gasto="' + esc(g.id) + '" style="margin-top:8px">' +
         'Borrar este gasto</button>',
-      null);                                     // ventana de solo leer
+      null,                                      // ventana de solo leer
+      volverA ? { volverA:volverA } : undefined);
 
     if (g.foto) mostrarFotoEn('#fotoGasto', '#fotoGastoAviso', g.foto);
+  }
+
+  // ---- LA VENTANA DE UN ENVIO --------------------------------
+  // Lo mismo que la del gasto, del otro lado del dinero. Su pedido: "hazle lo
+  // mismo a los envios". Tambien aqui la foto vive ADENTRO.
+  function envioPorId(id){
+    return (S.envios || []).filter(function(e){ return e.id === id; })[0] || null;
+  }
+  function hojaVerEnvio(id, volverA){
+    var e = envioPorId(id);
+    if (!e) return;
+    var l = [];
+    function dato(k, v){ if (v) l.push('<div class="d"><span>' + k + '</span><b>' + v + '</b></div>'); }
+    dato('Cuándo llegó', e.llego_el ? esc(fecha(e.llego_el)) : 'Todavía no llega');
+    dato('De quién', esc(e.de_quien || ''));
+    dato('Cómo', esc(e.como || ''));
+    dato('Lo recibió', esc(e.recibio || ''));
+    // Los dolares son cuenta de EL. En el telefono de ella no tienen sentido y
+    // ademas es su informacion, no de ella.
+    if (S.soyDueno && e.usd) dato('Salieron', usd(cent(e.usd)));
+    dato('Nota', esc(e.nota || ''));
+    dato('Lo apuntó', esc(e.anoto || ''));
+    if (e.confirmo) dato('Lo confirmó', esc(e.confirmo));
+    if (e.gtq_antes){
+      dato('Corregido', 'antes decía ' + plata(cent(e.gtq_antes)) +
+           (e.corregido_por ? ' · lo corrigió ' + esc(e.corregido_por) : ''));
+    }
+    if (e.revisar) dato('En revisión', esc(e.revisar));
+
+    abrirHoja('Este dinero que entró',
+      '<div class="gran">+ ' + plata(cent(e.gtq)) + '</div>' +
+      '<div class="datos">' + l.join('') + '</div>' +
+      (e.foto
+        ? '<div class="sub" style="margin-top:18px">Comprobante</div>' +
+          '<img id="fotoEnvio" class="fotogde" alt="Comprobante del envío" hidden>' +
+          '<div class="sub" id="fotoEnvioAviso">Abriendo la foto…</div>'
+        : '<div class="sub" style="margin-top:18px">Este envío no tiene foto.</div>'),
+      null,                                      // ventana de solo leer
+      volverA ? { volverA:volverA } : undefined);
+
+    if (e.foto) mostrarFotoEn('#fotoEnvio', '#fotoEnvioAviso', e.foto);
   }
 
   // Pide la firma de la foto y la pone ADENTRO de la ventana, no en el visor
@@ -1661,6 +1711,9 @@
           if (e.nota) partes.push(e.nota);
           return partes.join(' · ');
         })(),
+        // La foto del envio NUNCA venia hasta aqui: el clip no podia salir
+        // aunque el envio tuviera comprobante. Solo se vio probandolo.
+        foto:e.foto,
         cent:cent(e.gtq), tipo2:'envios', anoto:e.anoto,
         revisar:e.revisar || '', antes:(e.gtq_antes ? cent(e.gtq_antes) : 0), corrigio:e.corregido_por || '',
         quien:(e.recibio ? 'lo recibió ' + e.recibio : (e.confirmo || e.anoto)) });
@@ -1705,17 +1758,21 @@
         ? '<button type="button" class="chico revisar-btn" data-revisar="' + x.tipo2 + ':' + esc(x.id) + '"' +
             ' data-que="' + esc(x.qué) + '" data-monto="' + x.cent + '">Corregir</button>'
         : '';
-      h += '<div class="fila' + (x.revisar ? ' enrevision' : '') + '">' +
-        (x.foto ? '<img class="miniftgr" data-foto="' + esc(x.foto) + '" alt="Recibo">' : '') +
+      // LA FOTO YA NO SE ASOMA, igual que en los gastos: un clip dice que hay
+      // comprobante y se ve tocando la fila. Los botones de revisar SI se
+      // quedan aqui: son un aviso, y un aviso escondido no avisa. Tocar uno de
+      // ellos no abre la ventana - closest() encuentra primero el boton.
+      h += '<div class="fila' + (x.revisar ? ' enrevision' : '') +
+        '" data-envio="' + esc(x.id) + '" style="cursor:pointer">' +
         '<div class="izq" style="flex:1">' +
-          '<div class="qué">' + esc(x.qué) + '</div>' +
+          '<div class="qué">' + (x.foto ? '📎 ' : '') + esc(x.qué) + '</div>' +
           '<div class="cuando">' + esc(fecha(x.f)) +
             (x.quien ? ' · ' + esc(x.quien) : '') +
             (x.nota ? ' · ' + esc(x.nota) : '') + '</div>' +
           antes + pedido +
         '</div>' +
         '<div class="monto ' + x.tipo + '">' + (x.tipo === 'entra' ? '+' : '−') + ' ' + plata(x.cent) +
-          preguntar + '</div>' +
+          ' ›' + preguntar + '</div>' +
         '</div>';
     });
     $('#listaMov').innerHTML = h;
@@ -1875,6 +1932,7 @@
   function abrirHoja(titulo, cuerpo, accion, opciones){
     var o = opciones || {};
     antesDeHoja = PANTALLA;
+    hojaVolverA = o.volverA || null;
     $('#hojaTitulo').textContent = titulo;
     $('#hojaCuerpo').innerHTML = cuerpo;
     aviso('#hojaAviso', '');
@@ -1891,7 +1949,19 @@
   // Regresa a la pantalla desde donde la abrieron. Antes botaba siempre al
   // principio, asi que anotar un gasto adentro de una carpeta lo sacaba de
   // la carpeta.
-  function cerrarHoja(){ hojaAccion = null; ver(antesDeHoja || 'app'); }
+  // UNA VENTANA ABIERTA DESDE OTRA VENTANA. Tocar una linea adentro de un
+  // grupo ("Dinero que vino de Amilcar") abre la ventana de ESE movimiento;
+  // al regresar tiene que volver al grupo, no botarlo a la pantalla de atras.
+  // 'volverA' es esa vuelta; se gasta en cuanto se usa, para que la siguiente
+  // ventana no herede la vuelta de la anterior.
+  var hojaVolverA = null;
+  function cerrarHoja(){
+    hojaAccion = null;
+    var v = hojaVolverA;
+    hojaVolverA = null;
+    if (v){ v(); return; }
+    ver(antesDeHoja || 'app');
+  }
   function val(id){ var e = document.getElementById(id); return e ? String(e.value || '').trim() : ''; }
   function numero(id){
     var t = val(id).replace(/,/g, '');
@@ -2752,13 +2822,23 @@
     // El doble-toque ya lo mata 'touch-action:manipulation' del CSS.
 
     document.addEventListener('click', function(ev){
-      var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu],[data-foto-tomar],[data-foto-galeria],[data-foto-quitar],[data-prest],[data-saldar],[data-borrar-prest],[data-grupo],[data-revisar],[data-corregir],[data-quitarev],[data-proy],[data-ir],[data-gasto],[data-borrar-gasto],[data-corregir-gasto]') : null;
+      var t = ev.target.closest ? ev.target.closest('[data-llego],[data-foto],[data-quitar-envio],[data-quitar-cat],[data-menu],[data-foto-tomar],[data-foto-galeria],[data-foto-quitar],[data-prest],[data-saldar],[data-borrar-prest],[data-grupo],[data-revisar],[data-corregir],[data-quitarev],[data-proy],[data-ir],[data-gasto],[data-borrar-gasto],[data-corregir-gasto],[data-envio],[data-engrupo]') : null;
       if (!t) return;
       if (t.dataset.borrarGasto){ borrarGasto(t.dataset.borrarGasto); return; }
       if (t.dataset.corregirGasto){ hojaGasto(t.dataset.corregirGasto); return; }
       // Tocar la fila ahora ABRE el gasto, no lo manda a corregir. Primero se
       // mira (con su recibo adentro) y desde ahi se decide.
       if (t.dataset.gasto){ hojaVerGasto(t.dataset.gasto); return; }
+      if (t.dataset.envio){ hojaVerEnvio(t.dataset.envio); return; }
+      // Adentro de un grupo: se abre la ventana y se recuerda a que grupo
+      // volver, para que Regresar no lo saque hasta la pantalla de atras.
+      if (t.dataset.engrupo){
+        var par = t.dataset.engrupo.split(':'), volver = grupoAbierto;
+        var vuelta = volver ? function(){ hojaGrupo(volver[0], volver[1]); } : null;
+        if (par[0] === 'envio') hojaVerEnvio(par[1], vuelta);
+        else hojaVerGasto(par[1], vuelta);
+        return;
+      }
       if (t.dataset.ir){
         if (t.dataset.ir === 'proyectos') irProyectos();
         else ver(t.dataset.ir);
