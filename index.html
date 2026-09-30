@@ -342,7 +342,7 @@
   <div class="env">
     <div id="unoAviso"></div>
     <div class="tarjeta" id="unoResumen"></div>
-    <button class="btn verde" id="btnGastoProy">+ Anotar lo que se dio</button>
+    <button class="btn verde" id="btnGastoProy">+ Anotar lo que se le dio al contratista</button>
     <button class="btn claro" id="btnEditarProy" hidden style="margin-top:8px">Cambiar el precio o el contratista</button>
     <div class="tarjeta" style="margin-top:14px">
       <h2>Todo lo de esta carpeta</h2>
@@ -376,7 +376,7 @@
 <script>
 (function(){
   'use strict';
-  var APP_BUILD = '2026-09-30-AC';
+  var APP_BUILD = '2026-09-30-AD';
 
   // ====== A DONDE SE CONECTA ==================================
   // Se llenan cuando el proyecto de Supabase exista. Hasta entonces
@@ -627,8 +627,21 @@
   // ---- CARPETAS POR PROYECTO ---------------------------------
   // Su pedido: "cada carpeta por proyecto de lo que se les va dando".
   // Una carpeta contesta tres cosas: cuanto se acordo, cuanto se le ha
-  // dado, cuanto falta. El "dado" sale de los gastos que apuntan a ella:
-  // el pago al contratista y el material van juntos, como el lo pidio.
+  // dado, cuanto falta.
+  //
+  // CAMBIO DE REGLA (30 sep 2026). Antes aqui entraba TODO lo de la obra:
+  // el pago al contratista Y el material. El lo escogio asi el 27, y el 30,
+  // ya viendola usada, la cambio: "En esta carpeta solo deberia de ir lo que
+  // se le va dando al contratista, no otros gastos que se ha hecho. Los otros
+  // gastos que se han hecho tienen que ir alla en la carpeta de saldo. Y aca
+  // se ve que esta mixteado los gastos".
+  // Tenia razon y la razon es de aritmetica: la carpeta compara contra el
+  // PRECIO ACORDADO con el contratista (Q105,000). Meter ahi la lamina y la
+  // gasolina hace que el "falta" baje sin que se le haya dado un centavo mas
+  // al contratista - o sea que la carpeta miente sobre lo unico que mide.
+  // Ahora: adentro de una carpeta SOLO van pagos al contratista. Todo lo
+  // demas es un gasto del fondo y vive en Saldo, sin carpeta. Las dos cosas
+  // siguen saliendo del mismo dinero: lo que cambia es contra que se miden.
   function gastosDeProyecto(gastos, proyId){
     return (gastos || []).filter(function(g){ return g.proyecto_id === proyId; });
   }
@@ -1230,17 +1243,20 @@
           '<div class="sub">Toque para ver todo \u203a</div></div>';
       });
     }
-    // LO QUE NO ESTA EN NINGUNA CARPETA tambien se ve. Si no, seria dinero
-    // gastado que no aparece en ninguna pantalla.
+    // LOS GASTOS DEL FONDO tambien se ven aqui. Antes esta tarjeta decia "Sin
+    // carpeta", como si fueran anotaciones que quedaron sueltas por descuido.
+    // Con la regla nueva es al reves: ese es su lugar correcto, y lo que esta
+    // adentro de una carpeta es la excepcion. El rotulo tenia que dejar de
+    // sonar a error.
     var sueltos = sinProyecto(S.gastos);
     if (sueltos.length){
       var t = sueltos.reduce(function(a, g){ return a + cent(g.gtq); }, 0);
       h += '<div class="tarjeta proy" data-proy="sueltos">' +
-        '<div class="granlbl">Sin carpeta</div>' +
+        '<div class="granlbl">Gastos del fondo</div>' +
         '<div class="gran">' + plata(t) + '</div>' +
         '<div class="sub">' + sueltos.length +
-        (sueltos.length === 1 ? ' gasto que no est\u00e1' : ' gastos que no est\u00e1n') +
-        ' en ning\u00fan proyecto \u203a</div></div>';
+        (sueltos.length === 1 ? ' gasto que no es' : ' gastos que no son') +
+        ' pago al contratista \u203a</div></div>';
     }
     lista.innerHTML = h;
     var b = $('#btnNuevoProy'); if (b) b.hidden = !S.soyDueno;
@@ -1272,10 +1288,11 @@
 
     if (sueltos){
       var t = gs.reduce(function(a, g){ return a + cent(g.gtq); }, 0);
-      $('#unoResumen').innerHTML = '<div class="granlbl">Sin carpeta</div>' +
+      $('#unoResumen').innerHTML = '<div class="granlbl">Gastos del fondo</div>' +
         '<div class="gran">' + plata(t) + '</div>' +
-        '<div class="sub">Estos gastos no est\u00e1n en ning\u00fan proyecto. ' +
-        'Se pueden dejar as\u00ed: igual cuentan en el fondo.</div>';
+        '<div class="sub">Material, flete, gasolina, lo que sea: todo lo que <b>no</b> se le ' +
+        'entrega al contratista va aqu\u00ed. Se resta del saldo igual, solo que no cuenta ' +
+        'contra el precio acordado de ninguna obra.</div>';
     } else {
       var r = resumenProy(p);
       $('#unoResumen').innerHTML = '<div class="granlbl">' + esc(p.nombre) + '</div>' +
@@ -1287,7 +1304,11 @@
 
     $('#unoLista').innerHTML = gs.length
       ? gs.map(filaGasto).join('')
-      : '<div class="sub">Todav\u00eda no se ha anotado nada en esta carpeta.</div>';
+      : '<div class="sub">' + (sueltos
+          ? 'Todav\u00eda no hay ning\u00fan gasto del fondo.'
+          : 'Todav\u00eda no se le ha dado nada al contratista de esta obra.<br><br>' +
+            'Aqu\u00ed va <b>solo</b> lo que se le entrega a \u00e9l. El material y los dem\u00e1s ' +
+            'gastos se anotan en <b>Saldo</b>, con \u00abGast\u00e9\u00bb.') + '</div>';
   }
 
   // CORREGIR O BORRAR UNA ANOTACION (30 sep 2026). Su pedido: "Nancy added
@@ -1608,7 +1629,10 @@
   // Campo de nombre con las opciones que ya se han usado antes, para que
   // nadie tenga que volver a teclear "Ferreteria La Bendicion" cada vez.
   // Es una lista de ayuda, no una reja: se puede escribir cualquier cosa.
-  function campoPersona(id, etiqueta, marcador, yaUsados){
+  // 'valor' llega lleno en un solo caso: adentro de una carpeta, donde ya
+  // sabemos a quien se le esta pagando (el contratista de esa obra). Es una
+  // casilla de texto, no un select: lo que trae se lee y se puede borrar.
+  function campoPersona(id, etiqueta, marcador, yaUsados, valor){
     var vistos = {}, ops = '';
     (yaUsados || []).forEach(function(v){
       var t = (v || '').trim();
@@ -1618,7 +1642,8 @@
     });
     return '<label for="' + id + '">' + esc(etiqueta) + '</label>' +
       '<input id="' + id + '" type="text" autocapitalize="words" ' +
-        'list="' + id + 'Lista" placeholder="' + esc(marcador) + '">' +
+        'list="' + id + 'Lista" placeholder="' + esc(marcador) + '"' +
+        (valor ? ' value="' + esc(valor) + '"' : '') + '>' +
       '<datalist id="' + id + 'Lista">' + ops + '</datalist>';
   }
   function nombresDeOrigen(){ return (S.envios || []).map(function(e){ return e.de_quien; }); }
@@ -1859,16 +1884,24 @@
       'Si sale ahora, se <b>resta del saldo</b>.</div>';
   }
 
+  // SOLO SE USA AL CORREGIR. Antes tambien salia al anotar un gasto nuevo, y
+  // ahi es donde se mezclo todo: cualquier gasto podia caer en la carpeta de
+  // la obra. Ahora se anota en un lugar o en el otro, y esta casilla existe
+  // nada mas para MOVER una anotacion que quedo del lado equivocado - que es
+  // justo lo que el pidio poder hacer el mismo.
   function campoProyecto(elegido){
     var ps = proyActivos();
     if (!ps.length) return '';
-    var o = '<option value="">— escoja la carpeta —</option>';
+    var o = '<option value="nada"' + (!elegido || elegido === 'nada' ? ' selected' : '') + '>' +
+            'No — es un gasto del fondo</option>';
     ps.forEach(function(p){
       o += '<option value="' + esc(p.id) + '"' + (p.id === elegido ? ' selected' : '') + '>' +
-           esc(p.nombre) + '</option>';
+           'Sí — pago al contratista de ' + esc(p.nombre) + '</option>';
     });
-    o += '<option value="nada">Sin carpeta</option>';
-    return '<label for="fProy">¿De qué proyecto es?</label><select id="fProy">' + o + '</select>';
+    return '<label for="fProy">¿Esto es un pago al contratista?</label>' +
+           '<select id="fProy">' + o + '</select>' +
+           '<div class="sub" style="margin:-6px 0 14px">En la carpeta de la obra solo va lo que se ' +
+           'le entrega al contratista. El material y lo demás son gastos del fondo.</div>';
   }
 
   // DOS COSAS DISTINTAS CON EL MISMO FORMULARIO:
@@ -1877,32 +1910,69 @@
   //     lo que ella va a hacer. Ahi la fecha NO puede venir con la de hoy.
   // Aviso de el: "Nancy va a anotar lo que ya se ha dado, no como nuevo
   // gasto; ella agregara solo lo que ya les hemos dado".
+  // LO QUE SE LE DA AL CONTRATISTA. Categoria fija: adentro de una carpeta
+  // TODO es lo mismo, un pago de esa obra. Preguntar "¿en que lo gastó?" ahi
+  // es lo que invito a meter lamina, electricidad y gasolina en la carpeta.
+  var CAT_CONTRATISTA = 'Pago al contratista';
+  // Que carpeta esta abierta en el formulario. guardarGasto la lee: es la
+  // unica manera de saber cual de los dos formularios lo llamo.
+  var gasteProy = null;
+
   function hojaGaste(proyId){
     var alDia = !!proyId && proyId !== 'nada';
-    abrirHoja(alDia ? 'Anotar lo que ya se le dio' : 'Gasté',
-      (alDia ? '<p class="sub">Esto es para apuntar dinero que <b>ya se entregó</b>. ' +
-               'No es un gasto de hoy: póngale el día en que de verdad se le dio.</p>' : '') +
-      '<label for="fMonto">' + (alDia ? '¿Cuánto se le dio?' : '¿Cuánto gastó?') +
-        ' (' + simbolo() + ')</label>' +
+    gasteProy = alDia ? proyId : null;
+    var p = alDia ? proyPorId(proyId) : null;
+    if (alDia && !p) return;
+
+    if (!alDia){
+      // GASTO DEL FONDO. Ya NO pregunta de que carpeta es: un gasto suelto
+      // nunca entra a una obra. Si de verdad era un pago al contratista, se
+      // anota desde adentro de la carpeta, o se corrige despues.
+      abrirHoja('Gasté',
+        '<label for="fMonto">¿Cuánto gastó? (' + simbolo() + ')</label>' +
+        '<input id="fMonto" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00">' +
+        campoHistorial() +
+        campoCategoria() +
+        campoPersona('fAQuien', '¿A quién le pagó? (opcional)',
+                     'La ferretería, el flete, …', nombresDeDestino()) +
+        '<label for="fNota">¿Qué fue? (opcional)</label>' +
+        '<input id="fNota" type="text" placeholder="20 sacos de cemento">' +
+        campoFecha('fFecha', '¿Qué día?') +
+        campoFoto(),
+        guardarGasto);
+      return;
+    }
+
+    abrirHoja('Lo que se le dio al contratista',
+      '<p class="sub">Aquí va <b>solo el dinero que se le entrega al contratista</b> de ' +
+        esc(p.nombre) + '. La lámina, la electricidad, la gasolina y cualquier otro gasto ' +
+        'no van aquí: ésos se anotan en <b>Saldo</b>, con «Gasté».</p>' +
+      '<p class="sub">Es para apuntar dinero que <b>ya se entregó</b>. No es un gasto de hoy: ' +
+        'póngale el día en que de verdad se le dio.</p>' +
+      '<label for="fMonto">¿Cuánto se le dio? (' + simbolo() + ')</label>' +
       '<input id="fMonto" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00">' +
       campoHistorial() +
-      campoProyecto(proyId) +
-      campoCategoria() +
-      campoPersona('fAQuien', (alDia ? '¿A quién se le dio?' : '¿A quién le pagó? (opcional)'),
-                   'El contratista, la ferretería, …', nombresDeDestino()) +
-      '<label for="fNota">¿Qué fue? (opcional)</label>' +
-      '<input id="fNota" type="text" placeholder="' +
-        (alDia ? 'Primer pago, 20 sacos de cemento…' : '20 sacos de cemento') + '">' +
-      campoFecha('fFecha', alDia ? '¿Qué día se le dio?' : '¿Qué día?',
-                 alDia ? '' : undefined) +
+      campoPersona('fAQuien', '¿A quién se le dio?', 'El contratista',
+                   nombresDeDestino(), p.contratista || '') +
+      '<label for="fNota">¿Qué pago fue? (opcional)</label>' +
+      '<input id="fNota" type="text" placeholder="Primer pago, abono de los cimientos…">' +
+      campoFecha('fFecha', '¿Qué día se le dio?', '') +
       campoFoto(),
       guardarGasto,
-      alDia ? { boton:'Anotar' } : undefined);
+      { boton:'Anotar' });
   }
 
   function guardarGasto(){
-    var monto = numero('fMonto'), cat = val('fCat'), f = val('fFecha');
-    if (!monto){ aviso('#hojaAviso', 'Escriba cuánto gastó.'); return Promise.resolve(false); }
+    // Adentro de una carpeta no hay casilla de categoria: es un pago al
+    // contratista y punto. Afuera si se pregunta, porque un gasto del fondo
+    // puede ser cualquier cosa.
+    var enCarpeta = !!gasteProy;
+    var monto = numero('fMonto'), f = val('fFecha');
+    var cat = enCarpeta ? CAT_CONTRATISTA : val('fCat');
+    if (!monto){
+      aviso('#hojaAviso', enCarpeta ? 'Escriba cuánto se le dio.' : 'Escriba cuánto gastó.');
+      return Promise.resolve(false);
+    }
     if (!cat){ aviso('#hojaAviso', 'Escoja en qué lo gastó.'); return Promise.resolve(false); }
     if (!f){
       aviso('#hojaAviso', 'Ponga el día — el día en que de verdad se dio el dinero.');
@@ -1914,12 +1984,12 @@
       aviso('#hojaAviso', 'Esa fecha todavía no llega. Revise el día.');
       return Promise.resolve(false);
     }
-    // Si hay carpetas, tiene que decir cual, aunque sea "Sin carpeta". Un
-    // gasto que cae en la carpeta equivocada mueve el "falta" de una obra.
-    var pid = $('#fProy') ? val('fProy') : 'nada';
-    if (proyActivos().length && !pid){
-      aviso('#hojaAviso', 'Escoja de qué proyecto es (o «Sin carpeta»).'); return Promise.resolve(false);
-    }
+    // LA CARPETA YA NO SE PREGUNTA. La decide el lugar desde donde se abrio
+    // el formulario: adentro de la obra es un pago al contratista, afuera es
+    // un gasto del fondo. Antes se preguntaba, y preguntar fue el error: un
+    // gasto de lamina podia escogerse para la carpeta de la obra y bajarle el
+    // "falta" al contratista sin que se le hubiera dado nada.
+    var pid = gasteProy || 'nada';
 
     // Sin respuesta no se guarda: es la diferencia entre restar del saldo o no.
     var hist = val('fHist');
